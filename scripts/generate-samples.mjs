@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { unzipSync, zipSync } from "fflate";
 import writeExcelFile from "write-excel-file/node";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,9 +138,24 @@ const xlsxLongRows = [["timestamp", "cell_id", "prb", "interference"]];
     ]);
   }
 });
+const xlsxPath = path.join(samplesDirectory, "synthetic-prb-examples.xlsx");
 await writeExcelFile([
   { data: xlsxWideRows, sheet: "Wide 273 PRBs", stickyRowsCount: 1 },
   { data: xlsxLongRows, sheet: "Long multi-cell", stickyRowsCount: 1 },
-]).toFile(path.join(samplesDirectory, "synthetic-prb-examples.xlsx"));
+]).toFile(xlsxPath);
+
+// XLSX is a ZIP archive. Normalize entry order and timestamps so sample
+// generation produces the same bytes on every supported operating system.
+const fixedTimestamp = new Date("2026-01-01T00:00:00.000Z");
+const generatedWorkbook = unzipSync(fs.readFileSync(xlsxPath));
+const deterministicWorkbook = Object.fromEntries(
+  Object.entries(generatedWorkbook)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, data]) => [name, [data, { mtime: fixedTimestamp }]]),
+);
+fs.writeFileSync(
+  xlsxPath,
+  zipSync(deterministicWorkbook, { level: 6, mtime: fixedTimestamp }),
+);
 
 process.stdout.write("Synthetic sample files generated.\n");
