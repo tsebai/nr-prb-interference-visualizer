@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { unzipSync, zipSync } from "fflate";
 import writeExcelFile from "write-excel-file/node";
 
+process.env.TZ = "UTC";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const samplesDirectory = path.join(root, "samples");
 fs.mkdirSync(samplesDirectory, { recursive: true });
@@ -150,7 +152,7 @@ const fixedTimestamp = new Date("2026-01-01T00:00:00.000Z");
 const generatedWorkbook = unzipSync(fs.readFileSync(xlsxPath));
 const deterministicWorkbook = Object.fromEntries(
   Object.entries(generatedWorkbook)
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .map(([name, data]) => [name, [data, { mtime: fixedTimestamp }]]),
 );
 fs.writeFileSync(
