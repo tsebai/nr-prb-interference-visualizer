@@ -1,0 +1,49 @@
+{
+  "name": "@tsebai/nr-prb-interference-visualizer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-only 5G NR PRB interference heatmap and analysis tool",
+  "author": "tsebai",
+  "license": "MIT",
+  "homepage": "https://hicelltek.com/tools/nr-prb-interference-visualizer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tsebai/nr-prb-interference-visualizer.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint src tests scripts vite.config.ts vitest.config.ts playwright.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "test:all": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run build && npm run test:e2e",
+    "generate:samples": "node scripts/generate-samples.mjs",
+    "notices": "node scripts/generate-notices.mjs",
+    "capture:screenshots": "node scripts/capture-screenshots.mjs",
+    "audit": "npm audit --audit-level=high"
+  },
+  "dependencies": {
+    "read-excel-file": "9.3.10"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.3.0",
+    "eslint": "10.9.1",
+    "prettier": "3.6.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.68.0",
+    "vite": "8.2.2",
+    "vitest": "4.1.11",
+    "write-excel-file": "4.1.1"
+  }
+}

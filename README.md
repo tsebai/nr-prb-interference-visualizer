@@ -1,0 +1,132 @@
+# HiCellTek NR PRB Interference Visualizer
+
+[![CI](https://github.com/tsebai/nr-prb-interference-visualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/tsebai/nr-prb-interference-visualizer/actions/workflows/ci.yml)
+[![MIT License](https://img.shields.io/badge/license-MIT-5b5cff.svg)](LICENSE)
+[![Live tool](https://img.shields.io/badge/live-hicelltek.com-ea3cad.svg)](https://hicelltek.com/tools/nr-prb-interference-visualizer/)
+
+A free, vendor-neutral 5G NR PRB interference visualizer for RAN engineers. Import structured CSV or XLSX counters, map the columns, and inspect a full-bandwidth heatmap, per-PRB statistics, multi-cell comparisons, and exportable summaries.
+
+The complete PRB range fits the available width by default, including 273 PRBs. Every value remains available for exact hover inspection. Zoom, pan, and **Fit full bandwidth** controls support closer analysis without making horizontal scrolling the default.
+
+[Open the live tool](https://hicelltek.com/tools/nr-prb-interference-visualizer/)
+
+![Desktop view of synthetic PRB interference data](docs/screenshots/desktop.png)
+
+## Privacy model
+
+Selected files are read with browser APIs and parsed in a local Web Worker. The engine does not upload the file, its name, headers, cell identifiers, or values. Parsing and visualization libraries are built into the local application assets, with no analysis-time CDN dependency.
+
+The live HiCellTek page may count a consented page visit using its standard site analytics. Imported data and file metadata are not added to those events. See [Local processing](docs/local-processing.md) for the exact boundary and verification method.
+
+## Features
+
+- CSV and XLSX import
+- Wide, long, and single-snapshot layouts
+- Dynamic PRB header detection for `PRB_0`, `PRB0`, `RB_0`, `RB0`, and numeric columns
+- Comma, semicolon, and tab delimiters
+- Point and unambiguous decimal comma support
+- Modifiable column mapping with worksheet selection and row preview
+- dBm, dB, raw counter, and custom units
+- Correct linear-power averaging for dBm
+- Automatic or manual color scales, thresholds, direction, palettes, cell and time filters, and aggregation intervals
+- Canvas heatmap with sparse tick labels, exact hover values, zoom, pan, and full-bandwidth reset
+- Persistent cell selector and compact multi-cell overview
+- Mean, median, maximum, P95, and threshold-exceedance summaries
+- PNG heatmap export, safe CSV summary export, and print view
+- Synthetic demo datasets and a deterministic sample generator
+- File-size, row-count, and measurement-count safety limits
+
+## Try it locally
+
+Requirements: Node.js 22.13 or later.
+
+```bash
+git clone https://github.com/tsebai/nr-prb-interference-visualizer.git
+cd nr-prb-interference-visualizer
+npm ci
+npm run generate:samples
+npm run dev
+```
+
+Vite prints the local URL. The production build uses the canonical path `/tools/nr-prb-interference-visualizer/`.
+
+## Basic workflow
+
+1. Export PRB interference counters from the gNB or OSS.
+2. Remove or anonymize sensitive identifiers.
+3. Open the tool.
+4. Select CSV or XLSX.
+5. Map the columns.
+6. Choose the unit and threshold.
+7. Generate and export the heatmap.
+
+The tool visualizes the counters provided. It does not validate a manufacturer's counter definition and does not replace analysis by an RF engineer.
+
+## Input layouts
+
+Wide layout:
+
+```csv
+timestamp,cell_id,PRB_0,PRB_1,PRB_2
+2026-01-01T10:00:00Z,CELL_A,-111.2,-103.8,-109.4
+```
+
+Long layout:
+
+```csv
+timestamp,cell_id,prb,interference
+2026-01-01T10:00:00Z,CELL_A,0,-111.2
+2026-01-01T10:00:00Z,CELL_A,1,-103.8
+```
+
+A wide row without a timestamp is treated as a snapshot. PRB indices do not need to be continuous and the engine does not assume a fixed PRB count. See [Data formats](docs/data-formats.md) and the files in [`samples/`](samples/).
+
+## Synthetic demonstrations
+
+The repository includes:
+
+- 273 PRBs with persistent narrowband interference
+- temporary broadband interference with semicolon delimiters and decimal commas
+- long-format measurements for several cells
+- controlled missing and invalid values
+- a multi-sheet XLSX workbook
+
+All examples are synthetic. They do not reproduce a customer, vendor, gNB, or OSS export.
+
+Regenerate them with:
+
+```bash
+npm run generate:samples
+```
+
+## Development checks
+
+```bash
+npm run format:check
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run build
+npm run test:e2e
+npm run audit
+```
+
+The test suite covers format and PRB detection, CSV and XLSX parsing, separators and decimals, dBm and raw averaging, median and P95, missing values, thresholds, multiple cells, snapshots, invalid files, safe CSV exports, browser interaction, responsive full-bandwidth fitting, keyboard use, and network privacy sentinels.
+
+## Reuse and site integration
+
+The generic engine is exposed as the custom element `<nr-prb-visualizer>`. Its build emits a stable JavaScript entry, a stable stylesheet, and a hashed Web Worker. The official site vendors versioned assets and verifies their SHA-256 values. See [Integration](docs/integration.md).
+
+## Technical scope
+
+This is an independent, vendor-neutral visualization tool. Compatibility depends on the structure and meaning of the exported counters.
+
+NR transmission bandwidth configurations vary with channel bandwidth and subcarrier spacing. Section 5.3.2 of [ETSI TS 138 104 V18.13.0](https://www.etsi.org/deliver/etsi_ts/138100_138199/138104/18.13.00_60/ts_138104v181300p.pdf) includes 273 PRBs for 100 MHz with 30 kHz subcarrier spacing in FR1. This engine detects the PRB indices present in the file instead of hardcoding 273.
+
+## Contributing and security
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before submitting changes. Runtime dependency notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## License
+
+MIT License. Copyright 2026 tsebai.

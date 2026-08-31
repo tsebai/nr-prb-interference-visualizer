@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Turn CSV or XLSX NR interference counters into a private, browser-only PRB heatmap and statistical summary."
+    />
+    <title>5G NR PRB Interference Visualizer</title>
+  </head>
+  <body class="nr-prb-standalone">
+    <header class="standalone-header">
+      <a href="https://hicelltek.com" aria-label="HiCellTek home">HiCellTek</a>
+      <a href="https://github.com/tsebai/nr-prb-interference-visualizer"
+        >Source code</a
+      >
+    </header>
+    <main class="standalone-shell">
+      <div class="standalone-intro">
+        <p class="eyebrow">Free RAN engineering tool</p>
+        <h1>5G NR PRB Interference Visualizer</h1>
+        <p>
+          Import structured NR interference counters and turn them into a
+          full-bandwidth heatmap. Every value stays in this browser.
+        </p>
+      </div>
+      <nr-prb-visualizer></nr-prb-visualizer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

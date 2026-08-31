@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a generic, vendor-neutral improvement.
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Engineering problem
+      description: What analysis task is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the generic workflow and expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: format
+    attributes:
+      label: Synthetic input example
+      description: Include only synthetic field names and values if a new format is involved.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope confirmation
+      options:
+        - label: The request is vendor-neutral and does not require proprietary documentation.
+          required: true
