@@ -3,6 +3,7 @@ import type {
   AnalysisOptions,
   AnalysisResult,
   Measurement,
+  PeriodProfile,
   PeriodSummary,
   PrbSummary,
 } from "../types";
@@ -98,10 +99,13 @@ export function buildAnalysis(
   points: AggregatedPoint[],
   selectedCell: string,
   options: AnalysisOptions,
+  availableCells?: string[],
 ): AnalysisResult {
-  const cells = [...new Set(points.map((point) => point.cell))].sort(
-    (left, right) => left.localeCompare(right),
-  );
+  const cells = (
+    availableCells ?? [...new Set(points.map((point) => point.cell))]
+  )
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .sort((left, right) => left.localeCompare(right));
   const cell = cells.includes(selectedCell)
     ? selectedCell
     : (cells[0] ?? "Unspecified cell");
@@ -128,12 +132,21 @@ export function buildAnalysis(
 
   const values = new Map<string, number>();
   const byPrb = new Map<number, number[]>();
+  const byPeriod = new Map<string, number[]>();
   filtered.forEach((point) => {
-    const key = `${periodKey(point.timestampMs, point.periodOrder, point.timestampLabel)}|${point.prb}`;
+    const pointPeriodKey = periodKey(
+      point.timestampMs,
+      point.periodOrder,
+      point.timestampLabel,
+    );
+    const key = `${pointPeriodKey}|${point.prb}`;
     values.set(key, point.value);
     const list = byPrb.get(point.prb) ?? [];
     list.push(point.value);
     byPrb.set(point.prb, list);
+    const periodValues = byPeriod.get(pointPeriodKey) ?? [];
+    periodValues.push(point.value);
+    byPeriod.set(pointPeriodKey, periodValues);
   });
 
   const summaries: PrbSummary[] = prbs.map((prb) => {
@@ -159,6 +172,18 @@ export function buildAnalysis(
     };
   });
 
+  const periodProfiles: PeriodProfile[] = periods.map((period) => {
+    const periodValues = byPeriod.get(period.key) ?? [];
+    return {
+      period,
+      minimum: Math.min(...periodValues),
+      mean: measurementMean(periodValues, options.unitMode),
+      maximum: Math.max(...periodValues),
+      p95: p95(periodValues),
+      samples: periodValues.length,
+    };
+  });
+
   const allValues = filtered.map((point) => point.value);
   const timestamps = periods.filter((period) => period.timestampMs !== null);
   return {
@@ -168,6 +193,7 @@ export function buildAnalysis(
     periods,
     values,
     summaries,
+    periodProfiles,
     missingValues: Math.max(0, periods.length * prbs.length - filtered.length),
     rangeStart: timestamps[0]?.label ?? periods[0]?.label ?? "Not available",
     rangeEnd:

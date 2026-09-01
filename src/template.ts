@@ -53,7 +53,8 @@ export const APP_TEMPLATE = `
       <div class="nr-control-grid nr-mapping-controls">
         <label data-sheet-field hidden>Worksheet<select data-sheet></select></label>
         <label>Data layout<select data-format><option value="wide">Wide, one PRB per column</option><option value="long">Long, one measurement per row</option></select></label>
-        <label>Timestamp column<select data-timestamp></select><small>Optional for a snapshot.</small></label>
+        <label>Date or timestamp column<select data-timestamp></select><small>Optional for a snapshot.</small></label>
+        <label>Time column<select data-timestamp-time></select><small>Optional when date and time are separate.</small></label>
         <label>Cell column<select data-cell-column></select><small>Optional for a single unnamed cell.</small></label>
         <label data-long-field>PRB index column<select data-prb-column></select></label>
         <label data-long-field>Value column<select data-value-column></select></label>
@@ -130,10 +131,17 @@ export const APP_TEMPLATE = `
       </figure>
 
       <label class="nr-overview-toggle"><input type="checkbox" data-overview-toggle /> Show compact multi-cell overview</label>
+      <p class="nr-overview-note nr-muted" data-overview-note hidden></p>
       <div class="nr-overview" data-overview hidden></div>
 
       <section class="nr-summary-chart" aria-labelledby="nr-chart-title">
-        <div class="nr-subheading"><h3 id="nr-chart-title">PRB statistical profile</h3><p>Mean, median, maximum, and P95 across the selected periods.</p></div>
+        <div class="nr-subheading">
+          <div><h3 id="nr-chart-title" data-profile-title>PRB statistical profile</h3><p data-profile-description>Mean, median, maximum, and P95 across the selected periods.</p></div>
+          <div class="nr-profile-toggle" role="group" aria-label="Statistical profile axis">
+            <button type="button" class="nr-button nr-button-compact is-active" data-profile-prb aria-pressed="true">By PRB</button>
+            <button type="button" class="nr-button nr-button-compact" data-profile-period aria-pressed="false">By period</button>
+          </div>
+        </div>
         <canvas data-summary-chart aria-label="Statistical profile by PRB"></canvas>
       </section>
 

@@ -5,6 +5,7 @@ import type { ColumnMapping } from "../src/types";
 const wideMapping: ColumnMapping = {
   format: "wide",
   timestampColumn: 0,
+  timestampTimeColumn: null,
   cellColumn: 1,
   prbColumn: null,
   valueColumn: null,
@@ -49,6 +50,39 @@ describe("normalization", () => {
       "CELL_A",
       "CELL_B",
     ]);
+  });
+
+  it("combines separate date and time columns without local timezone drift", () => {
+    const result = normalizeMatrix(
+      [
+        ["Date", "Time", "Cell Name", "UL.Interference.Avg.PRB0(dBm)"],
+        ["2020-08-17", "14:05", "SYNTH_CELL_A", -102],
+      ],
+      {
+        ...wideMapping,
+        timestampColumn: 0,
+        timestampTimeColumn: 1,
+        cellColumn: 2,
+        widePrbColumns: [{ columnIndex: 3, prbIndex: 0 }],
+      },
+    );
+    expect(result.measurements[0]?.timestampLabel).toBe(
+      "2020-08-17T14:05:00.000Z",
+    );
+  });
+
+  it("treats NIL counters as missing instead of fabricating a floor value", () => {
+    const result = normalizeMatrix(
+      [
+        ["timestamp", "cell_id", "PRB_0", "PRB_7"],
+        ["2026-08-31T08:00:00Z", "SYNTH_CELL_A", -110, "NIL"],
+      ],
+      wideMapping,
+    );
+    expect(result.measurements).toHaveLength(1);
+    expect(result.missingValueCount).toBe(1);
+    expect(result.invalidValueCount).toBe(0);
+    expect(result.measurements.some((item) => item.value === -125)).toBe(false);
   });
 
   it("accepts a single snapshot without timestamp", () => {

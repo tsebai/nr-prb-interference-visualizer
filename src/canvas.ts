@@ -1,9 +1,4 @@
-import type {
-  AnalysisResult,
-  PaletteName,
-  PeriodSummary,
-  PrbSummary,
-} from "./types";
+import type { AnalysisResult, PaletteName, PeriodSummary } from "./types";
 import { paletteColor, paletteStops } from "./lib/palette";
 
 interface HeatmapSettings {
@@ -52,6 +47,14 @@ function shortPeriodLabel(label: string): string {
   const date = new Date(label);
   if (Number.isFinite(date.getTime())) {
     return date.toISOString().slice(11, 16);
+  }
+  return label.length > 16 ? `${label.slice(0, 14)}…` : label;
+}
+
+function shortProfilePeriodLabel(label: string): string {
+  const date = new Date(label);
+  if (Number.isFinite(date.getTime())) {
+    return date.toISOString().slice(5, 16).replace("T", " ");
   }
   return label.length > 16 ? `${label.slice(0, 14)}…` : label;
 }
@@ -363,43 +366,74 @@ export class HeatmapRenderer {
 
 export class SummaryChartRenderer {
   private readonly resizeObserver: ResizeObserver;
-  private summaries: PrbSummary[] = [];
+  private analysis: AnalysisResult | null = null;
   private unit = "";
+  private mode: "prb" | "period" = "prb";
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.resizeObserver = new ResizeObserver(() => this.render());
     this.resizeObserver.observe(canvas.parentElement ?? canvas);
   }
 
-  update(summaries: PrbSummary[], unit: string): void {
-    this.summaries = summaries;
+  update(analysis: AnalysisResult, unit: string, mode: "prb" | "period"): void {
+    this.analysis = analysis;
     this.unit = unit;
+    this.mode = mode;
     this.render();
   }
 
   private render(): void {
-    if (this.summaries.length === 0) return;
+    if (!this.analysis) return;
+    const pointCount =
+      this.mode === "prb"
+        ? this.analysis.summaries.length
+        : this.analysis.periodProfiles.length;
+    if (pointCount === 0) return;
     const width = Math.max(280, this.canvas.parentElement?.clientWidth ?? 900);
     const height = 300;
     const context = setCanvasSize(this.canvas, width, height);
     context.fillStyle = "#11162a";
     context.fillRect(0, 0, width, height);
+    const legendColumns = width < 520 ? 2 : 4;
+    const legendRows = Math.ceil(4 / legendColumns);
     const layout = {
       left: width < 520 ? 52 : 72,
       right: 18,
-      top: 42,
+      top: 24 + legendRows * 18,
       bottom: 42,
     };
     const plotWidth = width - layout.left - layout.right;
     const plotHeight = height - layout.top - layout.bottom;
-    const series = [
-      { key: "mean" as const, label: "Mean", color: "#70d6c8" },
-      { key: "median" as const, label: "Median", color: "#f2cf63" },
-      { key: "maximum" as const, label: "Maximum", color: "#f28482" },
-      { key: "p95" as const, label: "P95", color: "#9b8afb" },
-    ];
-    const allValues = series.flatMap((item) =>
-      this.summaries.map((summary) => summary[item.key]),
+    const series =
+      this.mode === "prb"
+        ? [
+            { label: "Mean", color: "#70d6c8", key: "mean" as const },
+            { label: "Median", color: "#f2cf63", key: "median" as const },
+            { label: "Maximum", color: "#f28482", key: "maximum" as const },
+            { label: "P95", color: "#9b8afb", key: "p95" as const },
+          ]
+        : [
+            { label: "Minimum", color: "#f2cf63", key: "minimum" as const },
+            { label: "Mean", color: "#70d6c8", key: "mean" as const },
+            { label: "Maximum", color: "#f28482", key: "maximum" as const },
+            { label: "P95", color: "#9b8afb", key: "p95" as const },
+          ];
+    const valueAt = (seriesIndex: number, pointIndex: number): number => {
+      const key = series[seriesIndex]?.key;
+      if (!key) return 0;
+      if (this.mode === "prb") {
+        const summary = this.analysis?.summaries[pointIndex];
+        if (!summary || key === "minimum") return 0;
+        return summary[key];
+      }
+      const profile = this.analysis?.periodProfiles[pointIndex];
+      if (!profile || key === "median") return 0;
+      return profile[key];
+    };
+    const allValues = series.flatMap((_, seriesIndex) =>
+      Array.from({ length: pointCount }, (__, pointIndex) =>
+        valueAt(seriesIndex, pointIndex),
+      ),
     );
     const minimum = Math.min(...allValues);
     const maximum = Math.max(...allValues);
@@ -424,37 +458,52 @@ export class SummaryChartRenderer {
 
     series.forEach((item, seriesIndex) => {
       context.strokeStyle = item.color;
-      context.lineWidth = item.key === "maximum" ? 1.5 : 2;
+      context.lineWidth = item.label === "Maximum" ? 1.5 : 2;
       context.beginPath();
-      this.summaries.forEach((summary, index) => {
+      for (let index = 0; index < pointCount; index += 1) {
+        const value = valueAt(seriesIndex, index);
         const x =
-          layout.left +
-          (index / Math.max(1, this.summaries.length - 1)) * plotWidth;
-        const y =
-          layout.top + (1 - (summary[item.key] - minimum) / span) * plotHeight;
+          layout.left + (index / Math.max(1, pointCount - 1)) * plotWidth;
+        const y = layout.top + (1 - (value - minimum) / span) * plotHeight;
         if (index === 0) context.moveTo(x, y);
         else context.lineTo(x, y);
-      });
+      }
       context.stroke();
-      const legendX = layout.left + seriesIndex * Math.min(118, plotWidth / 4);
+      if (pointCount === 1) {
+        const value = valueAt(seriesIndex, 0);
+        const y = layout.top + (1 - (value - minimum) / span) * plotHeight;
+        context.beginPath();
+        context.arc(layout.left + plotWidth / 2, y, 3, 0, Math.PI * 2);
+        context.fillStyle = item.color;
+        context.fill();
+      }
+      const legendColumn = seriesIndex % legendColumns;
+      const legendRow = Math.floor(seriesIndex / legendColumns);
+      const legendWidth = plotWidth / legendColumns;
+      const legendX = layout.left + legendColumn * legendWidth;
+      const legendY = 14 + legendRow * 18;
       context.fillStyle = item.color;
-      context.fillRect(legendX, 14, 16, 3);
+      context.fillRect(legendX, legendY, 16, 3);
       context.fillStyle = "#d9dff3";
       context.textAlign = "left";
-      context.fillText(item.label, legendX + 21, 19);
+      context.fillText(item.label, legendX + 21, legendY + 5);
     });
 
     context.fillStyle = "#aeb8d3";
     context.textAlign = "center";
     const ticks = Math.max(2, Math.floor(plotWidth / 80));
-    const step = Math.max(1, Math.ceil(this.summaries.length / ticks));
-    this.summaries.forEach((summary, index) => {
-      if (index % step !== 0 && index !== this.summaries.length - 1) return;
-      const x =
-        layout.left +
-        (index / Math.max(1, this.summaries.length - 1)) * plotWidth;
-      context.fillText(String(summary.prb), x, height - 18);
-    });
+    const step = Math.max(1, Math.ceil(pointCount / ticks));
+    for (let index = 0; index < pointCount; index += 1) {
+      if (index % step !== 0 && index !== pointCount - 1) continue;
+      const x = layout.left + (index / Math.max(1, pointCount - 1)) * plotWidth;
+      const label =
+        this.mode === "prb"
+          ? String(this.analysis.summaries[index]?.prb ?? "")
+          : shortProfilePeriodLabel(
+              this.analysis.periodProfiles[index]?.period.label ?? "",
+            );
+      context.fillText(label, x, height - 18);
+    }
   }
 }
 

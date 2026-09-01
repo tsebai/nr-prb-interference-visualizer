@@ -78,4 +78,35 @@ describe("analysis", () => {
     expect(analysis.periods).toHaveLength(2);
     expect(analysis.summaries[0]?.thresholdPercent).toBe(50);
   });
+
+  it("builds a time profile with a physically correct dBm mean across PRBs", () => {
+    const periodMeasurements: Measurement[] = [
+      {
+        timestampMs: 1_000,
+        timestampLabel: "A",
+        periodOrder: 0,
+        cell: "CELL_A",
+        prb: 0,
+        value: -100,
+      },
+      {
+        timestampMs: 1_000,
+        timestampLabel: "A",
+        periodOrder: 0,
+        cell: "CELL_A",
+        prb: 1,
+        value: -110,
+      },
+    ];
+    const analysis = buildAnalysis(
+      aggregateMeasurements(periodMeasurements, options("dbm")),
+      "CELL_A",
+      options("dbm"),
+    );
+    expect(analysis.periodProfiles).toHaveLength(1);
+    expect(analysis.periodProfiles[0]?.minimum).toBe(-110);
+    expect(analysis.periodProfiles[0]?.mean).toBeCloseTo(-102.596, 3);
+    expect(analysis.periodProfiles[0]?.mean).not.toBe(-105);
+    expect(analysis.periodProfiles[0]?.maximum).toBe(-100);
+  });
 });
