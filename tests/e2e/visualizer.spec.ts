@@ -1,8 +1,17 @@
 import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
+
+async function readDownloadedFile(
+  downloadPath: string | null,
+): Promise<string> {
+  if (!downloadPath)
+    throw new Error("The browser did not expose the downloaded file path.");
+  return readFile(downloadPath, "utf8");
+}
 
 test("loads the page and renders the 273 PRB demo without horizontal scrolling", async ({
   page,
@@ -24,6 +33,42 @@ test("loads the page and renders the 273 PRB demo without horizontal scrolling",
       scrollWidth: shell.scrollWidth,
     }));
   expect(sizes.scrollWidth).toBe(sizes.clientWidth);
+});
+
+test("downloads empty wide and long CSV templates with the expected headers", async ({
+  page,
+}) => {
+  await page.goto("./");
+
+  const wideTemplateButton = page.getByRole("button", {
+    name: "Download wide CSV template",
+  });
+  const longTemplateButton = page.getByRole("button", {
+    name: "Download long CSV template",
+  });
+  await wideTemplateButton.focus();
+  await page.keyboard.press("Tab");
+  await expect(longTemplateButton).toBeFocused();
+
+  const wideDownloadEvent = page.waitForEvent("download");
+  await wideTemplateButton.click();
+  const wideDownload = await wideDownloadEvent;
+  expect(wideDownload.suggestedFilename()).toBe("nr-prb-wide-template.csv");
+  const widePath = await wideDownload.path();
+  expect(widePath).not.toBeNull();
+  expect(await readDownloadedFile(widePath)).toBe(
+    '"timestamp","cell_id","PRB_0","PRB_1","PRB_2"',
+  );
+
+  const longDownloadEvent = page.waitForEvent("download");
+  await longTemplateButton.click();
+  const longDownload = await longDownloadEvent;
+  expect(longDownload.suggestedFilename()).toBe("nr-prb-long-template.csv");
+  const longPath = await longDownload.path();
+  expect(longPath).not.toBeNull();
+  expect(await readDownloadedFile(longPath)).toBe(
+    '"timestamp","cell_id","prb","interference"',
+  );
 });
 
 test("switches cells instantly and shows the compact overview", async ({

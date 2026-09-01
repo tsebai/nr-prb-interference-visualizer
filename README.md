@@ -34,6 +34,7 @@ The live HiCellTek page may count a consented page visit using its standard site
 - Mean, median, maximum, P95, and threshold-exceedance summaries
 - PNG heatmap export, safe CSV summary export, and print view
 - Synthetic demo datasets and a deterministic sample generator
+- Empty wide and long CSV templates available directly from the import panel
 - File-size, row-count, and measurement-count safety limits
 
 ## Try it locally
@@ -80,6 +81,8 @@ timestamp,cell_id,prb,interference
 ```
 
 A wide row without a timestamp is treated as a snapshot. PRB indices do not need to be continuous and the engine does not assume a fixed PRB count. See [Data formats](docs/data-formats.md) and the files in [`samples/`](samples/).
+
+If you are preparing an export from scratch, use **Download wide CSV template** or **Download long CSV template** in the import panel. Both files contain headers only. Extend the wide template with the PRB columns present in your own counter export.
 
 ## Synthetic demonstrations
 
