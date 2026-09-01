@@ -9,9 +9,14 @@ export function normalizeHeader(value: CellValue): string {
 }
 
 export function detectPrbIndex(header: CellValue): number | null {
+  const text = String(header ?? "")
+    .trim()
+    .toLowerCase();
   const normalized = normalizeHeader(header);
   const match =
-    /^(?:prb|rb)_?(\d+)$/.exec(normalized) ?? /^(\d+)$/.exec(normalized);
+    /(?:^|[^a-z0-9])(?:prb|rb)[\s_.-]*(\d+)(?=$|[^0-9])/.exec(text) ??
+    /^(?:prb|rb)_?(\d+)$/.exec(normalized) ??
+    /^(\d+)$/.exec(normalized);
   if (!match?.[1]) return null;
   const index = Number(match[1]);
   return Number.isSafeInteger(index) && index >= 0 ? index : null;
@@ -42,17 +47,33 @@ export function describeColumns(headers: CellValue[]): ColumnDescriptor[] {
 
 export function detectMapping(headers: CellValue[]): MappingSuggestion {
   const columns = describeColumns(headers);
-  const timestampColumn = findColumn(columns, [
+  const combinedTimestampColumn = findColumn(columns, [
     /^timestamp$/,
     /^date_time$/,
     /^datetime$/,
-    /^time$/,
     /^period$/,
-    /^measurement_time$/,
+    /^measurement_timestamp$/,
   ]);
+  const dateColumn = findColumn(columns, [
+    /^date$/,
+    /^measurement_date$/,
+    /^report_date$/,
+  ]);
+  const timeColumn = findColumn(columns, [
+    /^time$/,
+    /^measurement_time$/,
+    /^report_time$/,
+  ]);
+  const timestampColumn = combinedTimestampColumn ?? dateColumn ?? timeColumn;
+  const timestampTimeColumn =
+    combinedTimestampColumn === null && dateColumn !== null ? timeColumn : null;
   const cellColumn = findColumn(columns, [
     /^cell_id$/,
     /^cell$/,
+    /^cell_name$/,
+    /^cellname$/,
+    /^local_cell_id$/,
+    /^localcell_id$/,
     /^nr_cell$/,
     /^gnb_cell$/,
     /^nci$/,
@@ -74,6 +95,7 @@ export function detectMapping(headers: CellValue[]): MappingSuggestion {
   ]);
   const excluded = new Set([
     timestampColumn,
+    timestampTimeColumn,
     cellColumn,
     prbColumn,
     valueColumn,
@@ -90,6 +112,7 @@ export function detectMapping(headers: CellValue[]): MappingSuggestion {
   return {
     format,
     timestampColumn,
+    timestampTimeColumn,
     cellColumn,
     prbColumn,
     valueColumn,

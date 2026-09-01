@@ -22,7 +22,7 @@ The live HiCellTek page may count a consented page visit using its standard site
 
 - CSV and XLSX import
 - Wide, long, and single-snapshot layouts
-- Dynamic PRB header detection for `PRB_0`, `PRB0`, `RB_0`, `RB0`, and numeric columns
+- Dynamic PRB header detection for compact, numeric, and prefixed counter names such as `PRB_0`, `RB0`, `7`, and `UL.Interference.Avg.PRB7(dBm)`
 - Comma, semicolon, and tab delimiters
 - Point and unambiguous decimal comma support
 - Modifiable column mapping with worksheet selection and row preview
@@ -30,8 +30,8 @@ The live HiCellTek page may count a consented page visit using its standard site
 - Correct linear-power averaging for dBm
 - Automatic or manual color scales, thresholds, direction, palettes, cell and time filters, and aggregation intervals
 - Canvas heatmap with sparse tick labels, exact hover values, zoom, pan, and full-bandwidth reset
-- Persistent cell selector and compact multi-cell overview
-- Mean, median, maximum, P95, and threshold-exceedance summaries
+- Persistent cell selector with indexed switching and a bounded compact multi-cell overview
+- Switchable PRB and time profiles with minimum, mean, median, maximum, P95, and threshold-exceedance summaries
 - PNG heatmap export, safe CSV summary export, and print view
 - Synthetic demo datasets and a deterministic sample generator
 - Empty wide and long CSV templates available directly from the import panel
@@ -81,6 +81,8 @@ timestamp,cell_id,prb,interference
 ```
 
 A wide row without a timestamp is treated as a snapshot. PRB indices do not need to be continuous and the engine does not assume a fixed PRB count. See [Data formats](docs/data-formats.md) and the files in [`samples/`](samples/).
+
+Exports with separate `Date` and `Time` columns are supported. The automatic mapper prefers an exact `Cell Name`, `cell_id`, or equivalent identifier and does not treat descriptive fields such as a duplex-mode indication as the cell selector.
 
 If you are preparing an export from scratch, use **Download wide CSV template** or **Download long CSV template** in the import panel. Both files contain headers only. Extend the wide template with the PRB columns present in your own counter export.
 

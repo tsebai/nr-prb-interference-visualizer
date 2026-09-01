@@ -14,6 +14,7 @@ import {
 } from "./lib/templates";
 import { APP_TEMPLATE } from "./template";
 import type {
+  AggregatedPoint,
   AnalysisOptions,
   AnalysisResult,
   ColumnDescriptor,
@@ -76,9 +77,11 @@ class NrPrbVisualizer extends HTMLElement {
   private normalization: NormalizationResult | null = null;
   private measurements: Measurement[] = [];
   private aggregated = [] as ReturnType<typeof aggregateMeasurements>;
+  private aggregatedByCell = new Map<string, AggregatedPoint[]>();
   private analysis: AnalysisResult | null = null;
   private heatmap: HeatmapRenderer | null = null;
   private summaryChart: SummaryChartRenderer | null = null;
+  private profileMode: "prb" | "period" = "prb";
   private initialized = false;
 
   connectedCallback(): void {
@@ -185,13 +188,13 @@ class NrPrbVisualizer extends HTMLElement {
       "[data-scale-mode]",
     ).addEventListener("change", () => {
       this.updateConfigFields();
-      if (this.measurements.length > 0) this.applyAnalysis(true);
+      if (this.measurements.length > 0) this.applyAnalysis(true, false);
     });
     ["[data-direction]", "[data-palette]"].forEach((selector) => {
       requiredElement<HTMLSelectElement>(this, selector).addEventListener(
         "change",
         () => {
-          if (this.measurements.length > 0) this.applyAnalysis(true);
+          if (this.measurements.length > 0) this.applyAnalysis(true, false);
         },
       );
     });
@@ -204,7 +207,7 @@ class NrPrbVisualizer extends HTMLElement {
       requiredElement<HTMLInputElement>(this, selector).addEventListener(
         "change",
         () => {
-          if (this.measurements.length > 0) this.applyAnalysis(true);
+          if (this.measurements.length > 0) this.applyAnalysis(true, false);
         },
       );
     });
@@ -218,7 +221,7 @@ class NrPrbVisualizer extends HTMLElement {
       this,
       "[data-cell-filter]",
     ).addEventListener("change", () => {
-      this.applyAnalysis(false);
+      this.applyAnalysis(false, false);
     });
     requiredElement<HTMLSelectElement>(
       this,
@@ -266,6 +269,14 @@ class NrPrbVisualizer extends HTMLElement {
     ).addEventListener("change", () => {
       this.renderOverview();
     });
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-profile-prb]",
+    ).addEventListener("click", () => this.setProfileMode("prb"));
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-profile-period]",
+    ).addEventListener("click", () => this.setProfileMode("period"));
   }
 
   private async inspectFile(file: File): Promise<void> {
@@ -356,6 +367,12 @@ class NrPrbVisualizer extends HTMLElement {
       inspection.columns,
       suggestion.timestampColumn,
       "No timestamp, use snapshot order",
+    );
+    this.populateColumnSelect(
+      requiredElement<HTMLSelectElement>(this, "[data-timestamp-time]"),
+      inspection.columns,
+      suggestion.timestampTimeColumn,
+      "No separate time column",
     );
     this.populateColumnSelect(
       requiredElement<HTMLSelectElement>(this, "[data-cell-column]"),
@@ -467,6 +484,7 @@ class NrPrbVisualizer extends HTMLElement {
     return {
       format,
       timestampColumn: selectedNumber("[data-timestamp]"),
+      timestampTimeColumn: selectedNumber("[data-timestamp-time]"),
       cellColumn: selectedNumber("[data-cell-column]"),
       prbColumn: selectedNumber("[data-prb-column]"),
       valueColumn: selectedNumber("[data-value-column]"),
@@ -532,11 +550,14 @@ class NrPrbVisualizer extends HTMLElement {
     requiredElement<HTMLInputElement>(this, "[data-overview-toggle]").checked =
       false;
     requiredElement<HTMLElement>(this, "[data-overview]").hidden = true;
+    requiredElement<HTMLElement>(this, "[data-overview-note]").hidden = true;
     const cellSelect = requiredElement<HTMLSelectElement>(
       this,
       "[data-cell-filter]",
     );
     cellSelect.replaceChildren();
+    this.profileMode = "prb";
+    this.updateProfileControls();
     this.applyAnalysis(false);
     results.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -578,16 +599,24 @@ class NrPrbVisualizer extends HTMLElement {
     return custom.slice(0, 24) || "units";
   }
 
-  private applyAnalysis(preserveView: boolean): void {
+  private applyAnalysis(preserveView: boolean, reaggregate = true): void {
     if (this.measurements.length === 0) return;
     try {
       const options = this.analysisOptions();
-      this.aggregated = aggregateMeasurements(this.measurements, options);
+      if (reaggregate || this.aggregatedByCell.size === 0) {
+        this.aggregated = aggregateMeasurements(this.measurements, options);
+        this.aggregatedByCell.clear();
+        this.aggregated.forEach((point) => {
+          const cellPoints = this.aggregatedByCell.get(point.cell) ?? [];
+          cellPoints.push(point);
+          this.aggregatedByCell.set(point.cell, cellPoints);
+        });
+      }
       if (this.aggregated.length === 0)
         throw new Error("No measurements remain inside the selected period.");
-      const cells = [
-        ...new Set(this.aggregated.map((point) => point.cell)),
-      ].sort((left, right) => left.localeCompare(right));
+      const cells = [...this.aggregatedByCell.keys()].sort((left, right) =>
+        left.localeCompare(right),
+      );
       const cellSelect = requiredElement<HTMLSelectElement>(
         this,
         "[data-cell-filter]",
@@ -602,10 +631,15 @@ class NrPrbVisualizer extends HTMLElement {
       cellSelect.value = cells.includes(previousCell)
         ? previousCell
         : (cells[0] ?? "");
-      this.analysis = buildAnalysis(this.aggregated, cellSelect.value, options);
+      this.analysis = buildAnalysis(
+        this.aggregatedByCell.get(cellSelect.value) ?? [],
+        cellSelect.value,
+        options,
+        cells,
+      );
       const settings = this.heatmapSettings(this.analysis, options);
       this.heatmap?.update(this.analysis, settings, preserveView);
-      this.summaryChart?.update(this.analysis.summaries, this.unitLabel());
+      this.renderProfile();
       this.renderSummary(this.analysis, cells.length, options);
       this.renderAffectedTable(this.analysis, options);
       this.renderStatus();
@@ -617,6 +651,54 @@ class NrPrbVisualizer extends HTMLElement {
           : "The visualization could not be updated.",
       );
     }
+  }
+
+  private setProfileMode(mode: "prb" | "period"): void {
+    this.profileMode = mode;
+    this.updateProfileControls();
+    this.renderProfile();
+  }
+
+  private updateProfileControls(): void {
+    const byPrb = requiredElement<HTMLButtonElement>(
+      this,
+      "[data-profile-prb]",
+    );
+    const byPeriod = requiredElement<HTMLButtonElement>(
+      this,
+      "[data-profile-period]",
+    );
+    const prbActive = this.profileMode === "prb";
+    byPrb.classList.toggle("is-active", prbActive);
+    byPrb.setAttribute("aria-pressed", String(prbActive));
+    byPeriod.classList.toggle("is-active", !prbActive);
+    byPeriod.setAttribute("aria-pressed", String(!prbActive));
+    requiredElement<HTMLElement>(this, "[data-profile-title]").textContent =
+      prbActive ? "PRB statistical profile" : "Time statistical profile";
+    requiredElement<HTMLElement>(
+      this,
+      "[data-profile-description]",
+    ).textContent = prbActive
+      ? "Mean, median, maximum, and P95 across the selected periods."
+      : "Minimum, mean, maximum, and P95 across all detected PRBs for each period.";
+    requiredElement<HTMLCanvasElement>(
+      this,
+      "[data-summary-chart]",
+    ).setAttribute(
+      "aria-label",
+      prbActive
+        ? "Statistical profile by PRB"
+        : "Statistical profile by period",
+    );
+  }
+
+  private renderProfile(): void {
+    if (!this.analysis) return;
+    this.summaryChart?.update(
+      this.analysis,
+      this.unitLabel(),
+      this.profileMode,
+    );
   }
 
   private heatmapSettings(analysis: AnalysisResult, options: AnalysisOptions) {
@@ -729,18 +811,42 @@ class NrPrbVisualizer extends HTMLElement {
       "[data-overview-toggle]",
     );
     const overview = requiredElement<HTMLElement>(this, "[data-overview]");
+    const overviewNote = requiredElement<HTMLElement>(
+      this,
+      "[data-overview-note]",
+    );
     overview.replaceChildren();
     overview.hidden = !toggle.checked;
+    overviewNote.hidden = !toggle.checked;
     if (!toggle.checked || !this.analysis) return;
     const options = this.analysisOptions();
-    const allValues = this.aggregated.map((point) => point.value);
+    let globalMinimum = Number.POSITIVE_INFINITY;
+    let globalMaximum = Number.NEGATIVE_INFINITY;
+    this.aggregated.forEach((point) => {
+      globalMinimum = Math.min(globalMinimum, point.value);
+      globalMaximum = Math.max(globalMaximum, point.value);
+    });
     const globalScale = {
       ...this.heatmapSettings(this.analysis, options),
-      scaleMin: Math.min(...allValues),
-      scaleMax: Math.max(...allValues),
+      scaleMin: globalMinimum,
+      scaleMax: globalMaximum,
     };
-    this.analysis.cells.forEach((cellName) => {
-      const cellAnalysis = buildAnalysis(this.aggregated, cellName, options);
+    const maximumOverviewCells = 12;
+    const visibleCells = [
+      this.analysis.cell,
+      ...this.analysis.cells.filter((cell) => cell !== this.analysis?.cell),
+    ].slice(0, maximumOverviewCells);
+    overviewNote.textContent =
+      this.analysis.cells.length > maximumOverviewCells
+        ? `Showing the selected cell and ${maximumOverviewCells - 1} comparison cells out of ${this.analysis.cells.length.toLocaleString()}. Use the cell selector for the complete set.`
+        : `Comparing all ${this.analysis.cells.length.toLocaleString()} detected cell(s) on one shared scale.`;
+    visibleCells.forEach((cellName) => {
+      const cellAnalysis = buildAnalysis(
+        this.aggregatedByCell.get(cellName) ?? [],
+        cellName,
+        options,
+        this.analysis?.cells,
+      );
       const figure = document.createElement("figure");
       const caption = document.createElement("figcaption");
       caption.textContent = cellName;

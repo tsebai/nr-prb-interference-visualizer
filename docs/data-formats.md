@@ -26,6 +26,7 @@ Supported PRB header families include:
 - `PRB_0` and `PRB0`
 - `RB_0` and `RB0`
 - numeric headers such as `0`, `1`, and `2`
+- prefixed or suffixed counters such as `UL.Interference.Avg.PRB0(dBm)`
 
 The numeric suffix is the PRB index. Indices may be sparse and the total count is dynamic.
 
@@ -58,7 +59,7 @@ The visualizer labels these rows as snapshots and preserves their input order.
 - Delimiters: comma, semicolon, or tab
 - Quoting: standard double-quoted fields and doubled quote escaping
 - Decimals: point, decimal comma in unambiguous contexts, or an explicit convention in the mapper
-- Missing markers: empty string, `NA`, `N/A`, `null`, `none`, or `-`
+- Missing markers: empty string, `NA`, `N/A`, `NIL`, `null`, `none`, or `-`
 
 A semicolon-delimited decimal comma example:
 
@@ -73,7 +74,18 @@ The mapper lists every readable worksheet. Select a sheet before confirming the 
 
 ## Timestamps
 
-Accepted values include ISO 8601 strings, browser-parseable date strings, JavaScript `Date` values supplied by the XLSX parser, and Excel serial dates. Invalid timestamps are counted and excluded from time filtering.
+Accepted values include ISO 8601 strings, browser-parseable date strings, JavaScript `Date` values supplied by the XLSX parser, and Excel serial dates. Separate `Date` and `Time` columns can be mapped and are combined locally. Invalid timestamps are counted and excluded from time filtering.
+
+## Common OSS-style headers
+
+A vendor-neutral wide export can keep its original descriptive PRB headers:
+
+```csv
+Date,Time,Cell Name,UL.Interference.Avg.PRB0(dBm),UL.Interference.Avg.PRB1(dBm)
+2026-01-01,10:00,SYNTH_CELL_A,-111.2,-103.8
+```
+
+Automatic mapping is editable. A name in a header does not establish the meaning or unit of a counter, so confirm the unit and direction using the documentation for the source system.
 
 ## Measurement semantics
 

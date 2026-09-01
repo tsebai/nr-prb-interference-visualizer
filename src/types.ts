@@ -15,6 +15,7 @@ export interface ColumnDescriptor {
 export interface MappingSuggestion {
   format: DataFormat;
   timestampColumn: number | null;
+  timestampTimeColumn: number | null;
   cellColumn: number | null;
   prbColumn: number | null;
   valueColumn: number | null;
@@ -36,6 +37,7 @@ export interface InspectionResult {
 export interface ColumnMapping {
   format: DataFormat;
   timestampColumn: number | null;
+  timestampTimeColumn: number | null;
   cellColumn: number | null;
   prbColumn: number | null;
   valueColumn: number | null;
@@ -105,6 +107,15 @@ export interface PeriodSummary {
   order: number;
 }
 
+export interface PeriodProfile {
+  period: PeriodSummary;
+  minimum: number;
+  mean: number;
+  maximum: number;
+  p95: number;
+  samples: number;
+}
+
 export interface AnalysisResult {
   cell: string;
   cells: string[];
@@ -112,6 +123,7 @@ export interface AnalysisResult {
   periods: PeriodSummary[];
   values: Map<string, number>;
   summaries: PrbSummary[];
+  periodProfiles: PeriodProfile[];
   missingValues: number;
   rangeStart: string;
   rangeEnd: string;

@@ -33,6 +33,11 @@ test("loads the page and renders the 273 PRB demo without horizontal scrolling",
       scrollWidth: shell.scrollWidth,
     }));
   expect(sizes.scrollWidth).toBe(sizes.clientWidth);
+  const pageWidth = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(pageWidth.scrollWidth).toBe(pageWidth.clientWidth);
 });
 
 test("downloads empty wide and long CSV templates with the expected headers", async ({
@@ -82,6 +87,11 @@ test("switches cells instantly and shows the compact overview", async ({
   await expect(page.locator("[data-cell-filter]")).toHaveValue("SYNTH_CELL_B");
   await page.locator("[data-overview-toggle]").check();
   await expect(page.locator("[data-overview] figure")).toHaveCount(3);
+  const pageWidth = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(pageWidth.scrollWidth).toBe(pageWidth.clientWidth);
 });
 
 test("imports CSV, renders the heatmap, filters, and exports files", async ({
@@ -107,6 +117,45 @@ test("imports CSV, renders the heatmap, filters, and exports files", async ({
   await page.getByRole("button", { name: "Export summary CSV" }).click();
   expect((await csvDownload).suggestedFilename()).toBe(
     "nr-prb-interference-summary.csv",
+  );
+});
+
+test("detects OSS-style headers and switches between PRB and time profiles", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page
+    .locator("[data-file-input]")
+    .setInputFiles(
+      path.join(root, "tests", "fixtures", "oss-wide-synthetic.csv"),
+    );
+  await expect(page.locator("[data-format]")).toHaveValue("wide");
+  await expect(page.locator("[data-timestamp]")).toHaveValue("0");
+  await expect(page.locator("[data-timestamp-time]")).toHaveValue("1");
+  await expect(page.locator("[data-cell-column]")).toHaveValue("3");
+  await expect(page.locator("[data-detection]")).toContainText(
+    "3 PRB column(s)",
+  );
+
+  await page.getByRole("button", { name: "Generate heatmap" }).click();
+  await expect(page.locator("[data-cell-filter]")).toHaveValue(
+    "SYNTH_OSS_CELL_A",
+  );
+  await expect(page.locator("[data-summary-prbs]")).toHaveText("3");
+  await expect(page.locator("[data-summary-periods]")).toHaveText("2");
+  await expect(page.locator("[data-summary-missing]")).toHaveText("2");
+
+  await page.getByRole("button", { name: "By period" }).click();
+  await expect(page.locator("[data-profile-period]")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(
+    page.getByRole("heading", { name: "Time statistical profile" }),
+  ).toBeVisible();
+  await expect(page.locator("[data-summary-chart]")).toHaveAttribute(
+    "aria-label",
+    "Statistical profile by period",
   );
 });
 

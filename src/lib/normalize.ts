@@ -40,10 +40,62 @@ export function parseTimestamp(
   }
   const text = String(value ?? "").trim();
   if (!text) return null;
+  const unzonedIso =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/.exec(
+      text,
+    );
+  if (unzonedIso) {
+    const milliseconds = Date.UTC(
+      Number(unzonedIso[1]),
+      Number(unzonedIso[2]) - 1,
+      Number(unzonedIso[3]),
+      Number(unzonedIso[4]),
+      Number(unzonedIso[5]),
+      Number(unzonedIso[6] ?? 0),
+      Number((unzonedIso[7] ?? "0").padEnd(3, "0")),
+    );
+    if (Number.isFinite(milliseconds)) {
+      return { milliseconds, label: new Date(milliseconds).toISOString() };
+    }
+  }
   const milliseconds = Date.parse(text);
   return Number.isFinite(milliseconds)
     ? { milliseconds, label: new Date(milliseconds).toISOString() }
     : null;
+}
+
+function excelTimeFraction(value: number): string | null {
+  if (!Number.isFinite(value) || value < 0 || value >= 1) return null;
+  const totalSeconds = Math.round(value * 86_400) % 86_400;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+}
+
+export function parseTimestampParts(
+  dateValue: CellValue,
+  timeValue: CellValue,
+): { milliseconds: number; label: string } | null {
+  const timeText =
+    typeof timeValue === "number"
+      ? excelTimeFraction(timeValue)
+      : timeValue instanceof Date
+        ? timeValue.toISOString().slice(11, 23)
+        : String(timeValue ?? "").trim();
+  if (!timeText) return parseTimestamp(dateValue);
+
+  if (typeof dateValue === "number" && typeof timeValue === "number") {
+    return parseTimestamp(dateValue + timeValue);
+  }
+  const dateText =
+    dateValue instanceof Date
+      ? dateValue.toISOString().slice(0, 10)
+      : String(dateValue ?? "").trim();
+  if (!dateText) return parseTimestamp(timeValue);
+  return parseTimestamp(`${dateText} ${timeText}`);
 }
 
 function pushMeasurement(
@@ -95,7 +147,12 @@ export function normalizeMatrix(
       mapping.timestampColumn === null ? `Snapshot ${dataIndex + 1}` : "";
     if (mapping.timestampColumn !== null) {
       const rawTimestamp = row[mapping.timestampColumn] ?? null;
-      const parsedTimestamp = parseTimestamp(rawTimestamp);
+      const rawTime =
+        mapping.timestampTimeColumn !== null &&
+        mapping.timestampTimeColumn !== mapping.timestampColumn
+          ? (row[mapping.timestampTimeColumn] ?? null)
+          : null;
+      const parsedTimestamp = parseTimestampParts(rawTimestamp, rawTime);
       if (!parsedTimestamp) {
         invalidTimestampCount += 1;
         return;
@@ -117,7 +174,7 @@ export function normalizeMatrix(
         const parsedValue = parseLocaleNumber(rawValue, mapping.decimalMode);
         if (parsedValue === null) {
           const rawText = String(rawValue ?? "").trim();
-          if (rawText === "" || /^(?:na|n\/a|null|none|-)$/i.test(rawText))
+          if (rawText === "" || /^(?:na|n\/a|nil|null|none|-)$/i.test(rawText))
             missingValueCount += 1;
           else invalidValueCount += 1;
           return;
@@ -149,7 +206,7 @@ export function normalizeMatrix(
     const parsedValue = parseLocaleNumber(rawValue, mapping.decimalMode);
     if (parsedValue === null) {
       const rawText = String(rawValue ?? "").trim();
-      if (rawText === "" || /^(?:na|n\/a|null|none|-)$/i.test(rawText))
+      if (rawText === "" || /^(?:na|n\/a|nil|null|none|-)$/i.test(rawText))
         missingValueCount += 1;
       else invalidValueCount += 1;
       return;

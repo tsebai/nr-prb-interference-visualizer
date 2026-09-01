@@ -608,6 +608,7 @@ nr-prb-visualizer {
 .nr-overview canvas {
   display: block;
   width: 100%;
+  max-width: 100%;
   border: 1px solid #2c334c;
   border-radius: 0.45rem;
 }
@@ -621,6 +622,18 @@ nr-prb-visualizer {
 
 .nr-subheading {
   margin-bottom: 0.75rem;
+}
+
+.nr-profile-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+}
+
+.nr-profile-toggle .nr-button.is-active {
+  border-color: color-mix(in srgb, var(--nr-brand) 55%, var(--nr-border));
+  background: color-mix(in srgb, var(--nr-brand) 12%, var(--nr-surface));
+  color: var(--nr-brand-strong);
 }
 
 .nr-summary-chart canvas {
@@ -729,6 +742,14 @@ nr-prb-visualizer {
 
   .nr-template-actions {
     width: 100%;
+  }
+
+  .nr-profile-toggle {
+    width: 100%;
+  }
+
+  .nr-profile-toggle .nr-button {
+    flex: 1 1 0;
   }
 }
 
