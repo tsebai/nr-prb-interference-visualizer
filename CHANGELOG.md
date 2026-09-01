@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [1.0.1] - 2026-09-01
+
+### Added
+
+- Header-only wide and long CSV templates available from the import panel and repository samples.
+
 ## [1.0.0] - 2026-08-31
 
 ### Added

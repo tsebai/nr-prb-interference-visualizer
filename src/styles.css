@@ -230,6 +230,39 @@ nr-prb-visualizer {
   border-bottom: 1px solid var(--nr-border);
 }
 
+.nr-template-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--nr-border);
+}
+
+.nr-template-tools strong,
+.nr-template-tools small {
+  display: block;
+}
+
+.nr-template-tools small {
+  max-width: 68ch;
+  margin-top: 0.3rem;
+  line-height: 1.45;
+}
+
+.nr-template-tools code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.nr-template-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .nr-demo-control label,
 .nr-control-grid label,
 .nr-results-toolbar label {
@@ -686,6 +719,16 @@ nr-prb-visualizer {
 
   .nr-visual-toolbar {
     align-items: stretch;
+  }
+
+  .nr-template-tools,
+  .nr-template-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .nr-template-actions {
+    width: 100%;
   }
 }
 

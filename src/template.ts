@@ -25,6 +25,16 @@ export const APP_TEMPLATE = `
           <small>Synthetic data only. It does not reproduce any vendor or customer export.</small>
         </div>
       </div>
+      <div class="nr-template-tools" aria-label="Empty CSV templates">
+        <div>
+          <strong>Need a correctly formatted starting file?</strong>
+          <small>Download an empty header-only template. In wide format, add or remove <code>PRB_*</code> columns to match the counters in your export.</small>
+        </div>
+        <div class="nr-template-actions">
+          <button type="button" class="nr-button nr-button-compact" data-template-wide>Download wide CSV template</button>
+          <button type="button" class="nr-button nr-button-compact" data-template-long>Download long CSV template</button>
+        </div>
+      </div>
       <div class="nr-progress" data-progress hidden aria-live="polite">
         <div class="nr-progress-track"><span data-progress-bar></span></div>
         <p data-progress-label>Preparing local parser</p>

@@ -2,6 +2,15 @@
 
 The visualizer accepts `.csv` and `.xlsx` files up to 25 MB. The parser limits CSV input to 250,000 rows and normalized data to 2,000,000 measurements to protect browser memory.
 
+## Empty CSV templates
+
+The import panel provides two header-only downloads:
+
+- `nr-prb-wide-template.csv` starts with `timestamp`, `cell_id`, `PRB_0`, `PRB_1`, and `PRB_2`. Add or remove `PRB_*` columns to match the counters present in the export.
+- `nr-prb-long-template.csv` starts with `timestamp`, `cell_id`, `prb`, and `interference`. Add one row per PRB measurement.
+
+The repository also keeps exact copies in [`samples/`](../samples/). The templates contain no network data.
+
 ## Wide layout
 
 Each row represents a timestamp, interval, or snapshot. Each PRB has its own column.

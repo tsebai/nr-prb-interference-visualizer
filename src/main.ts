@@ -7,6 +7,11 @@ import {
 import { aggregateMeasurements, buildAnalysis } from "./lib/analysis";
 import { rowsToCsv } from "./lib/csv";
 import { createDemoMeasurements, type DemoKind } from "./lib/demo";
+import {
+  createCsvTemplate,
+  CSV_TEMPLATE_FILENAMES,
+  type CsvTemplateKind,
+} from "./lib/templates";
 import { APP_TEMPLATE } from "./template";
 import type {
   AnalysisOptions,
@@ -146,6 +151,14 @@ class NrPrbVisualizer extends HTMLElement {
         this.loadDemo(kind);
       },
     );
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-template-wide]",
+    ).addEventListener("click", () => this.downloadCsvTemplate("wide"));
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-template-long]",
+    ).addEventListener("click", () => this.downloadCsvTemplate("long"));
     requiredElement<HTMLSelectElement>(this, "[data-sheet]").addEventListener(
       "change",
       (event) => {
@@ -778,6 +791,13 @@ class NrPrbVisualizer extends HTMLElement {
     downloadBlob(
       new Blob([rowsToCsv(rows)], { type: "text/csv;charset=utf-8" }),
       "nr-prb-interference-summary.csv",
+    );
+  }
+
+  private downloadCsvTemplate(kind: CsvTemplateKind): void {
+    downloadBlob(
+      new Blob([createCsvTemplate(kind)], { type: "text/csv;charset=utf-8" }),
+      CSV_TEMPLATE_FILENAMES[kind],
     );
   }
 
