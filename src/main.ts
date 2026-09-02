@@ -8,6 +8,11 @@ import { aggregateMeasurements, buildAnalysis } from "./lib/analysis";
 import { rowsToCsv } from "./lib/csv";
 import { createDemoMeasurements, type DemoKind } from "./lib/demo";
 import {
+  dispatchNrPrbUsageEvent,
+  type NrPrbUsageAction,
+  type NrPrbUsageContext,
+} from "./events";
+import {
   createCsvTemplate,
   CSV_TEMPLATE_FILENAMES,
   type CsvTemplateKind,
@@ -83,6 +88,13 @@ class NrPrbVisualizer extends HTMLElement {
   private summaryChart: SummaryChartRenderer | null = null;
   private profileMode: "prb" | "period" = "prb";
   private initialized = false;
+
+  private reportUsage(
+    action: NrPrbUsageAction,
+    context: NrPrbUsageContext,
+  ): void {
+    dispatchNrPrbUsageEvent(this, action, context);
+  }
 
   connectedCallback(): void {
     if (this.initialized) return;
@@ -261,7 +273,10 @@ class NrPrbVisualizer extends HTMLElement {
     });
     requiredElement<HTMLButtonElement>(this, "[data-print]").addEventListener(
       "click",
-      () => window.print(),
+      () => {
+        this.reportUsage("export_completed", "print");
+        window.print();
+      },
     );
     requiredElement<HTMLInputElement>(
       this,
@@ -283,6 +298,7 @@ class NrPrbVisualizer extends HTMLElement {
     this.hideError();
     if (file.size > MAX_FILE_BYTES) {
       this.showError("The file exceeds the 25 MB browser safety limit.");
+      this.reportUsage("analysis_failed", "file_too_large");
       return;
     }
     const lowerName = file.name.toLowerCase();
@@ -295,6 +311,7 @@ class NrPrbVisualizer extends HTMLElement {
       this.showError(
         "Select a CSV or XLSX file. Other file types are not processed.",
       );
+      this.reportUsage("analysis_failed", "unsupported_file_type");
       return;
     }
     this.parser ??= new ParserWorkerClient();
@@ -310,11 +327,13 @@ class NrPrbVisualizer extends HTMLElement {
       this.measurements = [];
       this.renderInspection(inspection);
       this.finishProgress();
+      this.reportUsage("file_ready", "local_file");
     } catch (error) {
       this.finishProgress();
       this.showError(
         error instanceof Error ? error.message : "The file could not be read.",
       );
+      this.reportUsage("analysis_failed", "file_read_failed");
     }
   }
 
@@ -338,6 +357,7 @@ class NrPrbVisualizer extends HTMLElement {
           ? error.message
           : "The worksheet could not be read.",
       );
+      this.reportUsage("analysis_failed", "worksheet_read_failed");
     }
   }
 
@@ -511,7 +531,9 @@ class NrPrbVisualizer extends HTMLElement {
       );
       this.normalization = result;
       this.measurements = result.measurements;
-      this.prepareResults();
+      if (this.prepareResults()) {
+        this.reportUsage("analysis_completed", "local_file");
+      }
       this.finishProgress();
     } catch (error) {
       this.finishProgress();
@@ -520,6 +542,7 @@ class NrPrbVisualizer extends HTMLElement {
           ? error.message
           : "The selected mapping is invalid.",
       );
+      this.reportUsage("analysis_failed", "mapping_invalid");
     } finally {
       button.disabled = false;
     }
@@ -541,10 +564,13 @@ class NrPrbVisualizer extends HTMLElement {
     requiredElement<HTMLSelectElement>(this, "[data-unit]").value = "dbm";
     requiredElement<HTMLInputElement>(this, "[data-threshold]").value = "-95";
     requiredElement<HTMLElement>(this, "[data-mapping]").hidden = true;
-    this.prepareResults();
+    if (this.prepareResults()) {
+      this.reportUsage("demo_loaded", "demo");
+      this.reportUsage("analysis_completed", "demo");
+    }
   }
 
-  private prepareResults(): void {
+  private prepareResults(): boolean {
     const results = requiredElement<HTMLElement>(this, "[data-results]");
     results.hidden = false;
     requiredElement<HTMLInputElement>(this, "[data-overview-toggle]").checked =
@@ -558,8 +584,10 @@ class NrPrbVisualizer extends HTMLElement {
     cellSelect.replaceChildren();
     this.profileMode = "prb";
     this.updateProfileControls();
-    this.applyAnalysis(false);
+    this.analysis = null;
+    const completed = this.applyAnalysis(false);
     results.scrollIntoView({ behavior: "smooth", block: "start" });
+    return completed;
   }
 
   private analysisOptions(): AnalysisOptions {
@@ -599,8 +627,8 @@ class NrPrbVisualizer extends HTMLElement {
     return custom.slice(0, 24) || "units";
   }
 
-  private applyAnalysis(preserveView: boolean, reaggregate = true): void {
-    if (this.measurements.length === 0) return;
+  private applyAnalysis(preserveView: boolean, reaggregate = true): boolean {
+    if (this.measurements.length === 0) return false;
     try {
       const options = this.analysisOptions();
       if (reaggregate || this.aggregatedByCell.size === 0) {
@@ -644,12 +672,15 @@ class NrPrbVisualizer extends HTMLElement {
       this.renderAffectedTable(this.analysis, options);
       this.renderStatus();
       this.renderOverview();
+      return true;
     } catch (error) {
       this.showError(
         error instanceof Error
           ? error.message
           : "The visualization could not be updated.",
       );
+      this.reportUsage("analysis_failed", "analysis_failed");
+      return false;
     }
   }
 
@@ -864,11 +895,15 @@ class NrPrbVisualizer extends HTMLElement {
   private async exportPng(): Promise<void> {
     try {
       const blob = await this.heatmap?.exportPng();
-      if (blob) downloadBlob(blob, "nr-prb-interference-heatmap.png");
+      if (blob) {
+        downloadBlob(blob, "nr-prb-interference-heatmap.png");
+        this.reportUsage("export_completed", "png");
+      }
     } catch (error) {
       this.showError(
         error instanceof Error ? error.message : "PNG export failed.",
       );
+      this.reportUsage("analysis_failed", "png_export_failed");
     }
   }
 
@@ -898,6 +933,7 @@ class NrPrbVisualizer extends HTMLElement {
       new Blob([rowsToCsv(rows)], { type: "text/csv;charset=utf-8" }),
       "nr-prb-interference-summary.csv",
     );
+    this.reportUsage("export_completed", "csv");
   }
 
   private downloadCsvTemplate(kind: CsvTemplateKind): void {
@@ -905,6 +941,7 @@ class NrPrbVisualizer extends HTMLElement {
       new Blob([createCsvTemplate(kind)], { type: "text/csv;charset=utf-8" }),
       CSV_TEMPLATE_FILENAMES[kind],
     );
+    this.reportUsage("template_downloaded", kind);
   }
 
   private setProgress(value: number, message: string): void {

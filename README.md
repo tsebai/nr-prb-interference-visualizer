@@ -16,7 +16,7 @@ The complete PRB range fits the available width by default, including 273 PRBs. 
 
 Selected files are read with browser APIs and parsed in a local Web Worker. The engine does not upload the file, its name, headers, cell identifiers, or values. Parsing and visualization libraries are built into the local application assets, with no analysis-time CDN dependency.
 
-The live HiCellTek page may count a consented page visit using its standard site analytics. Imported data and file metadata are not added to those events. See [Local processing](docs/local-processing.md) for the exact boundary and verification method.
+The engine emits optional browser-only usage events containing fixed action and context codes. A host can use them for consented product analytics without receiving imported data or file metadata. The live HiCellTek page may count these actions only after analytics consent. See [Local processing](docs/local-processing.md) for the exact boundary and verification method.
 
 ## Features
 

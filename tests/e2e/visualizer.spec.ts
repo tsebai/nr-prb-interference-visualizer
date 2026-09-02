@@ -120,6 +120,62 @@ test("imports CSV, renders the heatmap, filters, and exports files", async ({
   );
 });
 
+test("emits only fixed privacy-safe usage events", async ({ page }) => {
+  await page.goto("./");
+  await page.evaluate(() => {
+    const usageEvents: Array<{ action: string; context: string }> = [];
+    document.addEventListener("nr-prb-usage", (event) => {
+      const detail = (event as CustomEvent).detail as {
+        action: string;
+        context: string;
+      };
+      usageEvents.push({ action: detail.action, context: detail.context });
+    });
+    (
+      window as typeof window & { __nrPrbUsageEvents: typeof usageEvents }
+    ).__nrPrbUsageEvents = usageEvents;
+  });
+
+  const templateDownload = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Download wide CSV template" })
+    .click();
+  await templateDownload;
+  await page.getByRole("button", { name: "Try demo data" }).click();
+  await page
+    .locator("[data-file-input]")
+    .setInputFiles(
+      path.join(root, "tests", "fixtures", "privacy-sentinel.csv"),
+    );
+  await expect(
+    page.getByRole("heading", { name: "Confirm the column mapping" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Generate heatmap" }).click();
+  const csvDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export summary CSV" }).click();
+  await csvDownload;
+
+  const events = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __nrPrbUsageEvents: Array<{ action: string; context: string }>;
+        }
+      ).__nrPrbUsageEvents,
+  );
+  expect(events).toEqual([
+    { action: "template_downloaded", context: "wide" },
+    { action: "demo_loaded", context: "demo" },
+    { action: "analysis_completed", context: "demo" },
+    { action: "file_ready", context: "local_file" },
+    { action: "analysis_completed", context: "local_file" },
+    { action: "export_completed", context: "csv" },
+  ]);
+  expect(JSON.stringify(events)).not.toContain("persistent-273-prb.csv");
+  expect(JSON.stringify(events)).not.toContain("SYNTH_PRIVATE_SENTINEL_8432");
+  expect(JSON.stringify(events)).not.toContain("-87.6543");
+});
+
 test("detects OSS-style headers and switches between PRB and time profiles", async ({
   page,
 }) => {

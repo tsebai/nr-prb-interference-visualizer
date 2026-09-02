@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.1.1] - 2026-09-02
+
+### Added
+
+- Browser-only usage events with fixed action and context codes for consent-aware host integrations.
+- End-to-end coverage proving that usage event payloads exclude imported file details and counter values.
+
 ## [1.1.0] - 2026-09-01
 
 ### Added
