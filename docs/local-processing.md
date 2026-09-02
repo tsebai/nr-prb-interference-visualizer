@@ -14,7 +14,7 @@ The file name is used transiently only to distinguish `.csv` from `.xlsx`. It is
 
 - It does not upload the file.
 - It does not call an analysis API.
-- It does not send file names, headers, cell identifiers, or values to analytics.
+- It does not send file names, sheet names, headers, cell identifiers, counter values, thresholds, row counts, timestamps, or free-form parser messages to analytics.
 - It does not send parsing errors or data excerpts to an error-reporting service.
 - It does not load a parser or chart library from a third-party CDN during analysis.
 
@@ -22,7 +22,7 @@ The file name is used transiently only to distinguish `.csv` from `.xlsx`. It is
 
 The end-to-end privacy test imports a CSV containing unique sentinel strings, records browser network requests, and fails if a request URL or body contains the file name, cell identifier, or counter value. Static tests also reject `XMLHttpRequest`, `navigator.sendBeacon`, remote URLs, analytics code, and error-reporting code in the engine bundle.
 
-Normal requests for the HTML, local JavaScript, local stylesheet, and local worker are expected when the page loads. A consented live page visit may be counted by the host site's standard analytics, but the visualizer does not add imported data or file metadata to those events.
+Normal requests for the HTML, local JavaScript, local stylesheet, and local worker are expected when the page loads. The engine can emit a local `nr-prb-usage` browser event with fixed action and context codes. This event does not make a network request. A host may forward allowlisted codes after analytics consent, but the visualizer does not add imported data or file metadata to those events.
 
 ## User responsibility
 
