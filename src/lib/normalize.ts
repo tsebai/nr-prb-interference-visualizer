@@ -6,6 +6,7 @@ import type {
 } from "../types";
 import { normalizeHeader } from "./detect";
 import { parseLocaleNumber } from "./csv";
+import { NrPrbError } from "../errors";
 
 const MAX_MEASUREMENTS = 2_000_000;
 
@@ -104,9 +105,7 @@ function pushMeasurement(
 ): void {
   measurements.push(measurement);
   if (measurements.length > MAX_MEASUREMENTS) {
-    throw new Error(
-      `The file exceeds the ${MAX_MEASUREMENTS.toLocaleString()} measurement limit.`,
-    );
+    throw new NrPrbError("MEASUREMENT_LIMIT");
   }
 }
 
@@ -126,13 +125,13 @@ export function normalizeMatrix(
   ).length;
 
   if (mapping.format === "wide" && mapping.widePrbColumns.length === 0) {
-    throw new Error("No PRB columns are mapped for the wide format.");
+    throw new NrPrbError("WIDE_PRB_MAPPING_REQUIRED");
   }
   if (
     mapping.format === "long" &&
     (mapping.prbColumn === null || mapping.valueColumn === null)
   ) {
-    throw new Error("Map both the PRB index and interference value columns.");
+    throw new NrPrbError("LONG_MAPPING_REQUIRED");
   }
 
   const measurements: Measurement[] = [];
@@ -222,9 +221,7 @@ export function normalizeMatrix(
   });
 
   if (measurements.length === 0) {
-    throw new Error(
-      "No valid PRB measurements were found with the selected mapping.",
-    );
+    throw new NrPrbError("NO_VALID_MEASUREMENTS");
   }
 
   const warnings: string[] = [];

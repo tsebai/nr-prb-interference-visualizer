@@ -1,5 +1,6 @@
 import type { AnalysisResult, PaletteName, PeriodSummary } from "./types";
 import { paletteColor, paletteStops } from "./lib/palette";
+import { NrPrbError } from "./errors";
 
 interface HeatmapSettings {
   palette: PaletteName;
@@ -33,8 +34,7 @@ function setCanvasSize(
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
   const context = canvas.getContext("2d");
-  if (!context)
-    throw new Error("Canvas rendering is not available in this browser.");
+  if (!context) throw new NrPrbError("RENDER_UNAVAILABLE");
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   return context;
 }
@@ -158,7 +158,7 @@ export class HeatmapRenderer {
     return new Promise((resolve, reject) => {
       this.canvas.toBlob(
         (blob) =>
-          blob ? resolve(blob) : reject(new Error("PNG export failed.")),
+          blob ? resolve(blob) : reject(new NrPrbError("PNG_EXPORT_FAILED")),
         "image/png",
       );
     });

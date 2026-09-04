@@ -39,7 +39,22 @@ export const APP_TEMPLATE = `
         <div class="nr-progress-track"><span data-progress-bar></span></div>
         <p data-progress-label>Preparing local parser</p>
       </div>
-      <p class="nr-error" data-error role="alert" hidden></p>
+      <div class="nr-error" data-error role="alert" aria-live="assertive" tabindex="-1" hidden>
+        <div class="nr-error-heading">
+          <strong data-error-title>Input could not be processed</strong>
+          <code data-error-code>NR-INPUT-999</code>
+        </div>
+        <p data-error-message></p>
+        <ul data-error-steps></ul>
+        <div class="nr-error-actions" data-error-actions>
+          <button type="button" class="nr-button nr-button-compact" data-error-choose-file hidden>Choose another file</button>
+          <button type="button" class="nr-button nr-button-compact" data-error-review-mapping hidden>Review column mapping</button>
+          <button type="button" class="nr-button nr-button-compact" data-error-review-period hidden>Review period filter</button>
+          <button type="button" class="nr-button nr-button-compact" data-error-review-scale hidden>Review color scale</button>
+          <button type="button" class="nr-button nr-button-compact" data-error-template-wide hidden>Download wide template</button>
+          <button type="button" class="nr-button nr-button-compact" data-error-template-long hidden>Download long template</button>
+        </div>
+      </div>
     </section>
 
     <section class="nr-mapping" data-mapping hidden aria-labelledby="nr-mapping-title">

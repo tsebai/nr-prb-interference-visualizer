@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## [1.2.0] - 2026-09-04
+
+### Added
+
+- Stable, privacy-safe error codes for file, CSV, XLSX, mapping, filter, scale, rendering, worker, and export failures.
+- Actionable inline recovery guidance with direct controls for reopening a file, reviewing a mapping or setting, and downloading an empty CSV template.
+- Browser tests for malformed CSV input, incomplete mappings, mobile error responsiveness, and explicit-only failure telemetry.
+
+### Changed
+
+- Worker failures now cross the browser boundary as fixed codes without raw parser messages.
+- Automatic visualization refreshes no longer emit repeated failure events.
+- A corrected setting immediately clears its previous error state.
+
 ## [1.1.1] - 2026-09-02
 
 ### Added

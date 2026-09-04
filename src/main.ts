@@ -13,6 +13,13 @@ import {
   type NrPrbUsageContext,
 } from "./events";
 import {
+  asNrPrbError,
+  errorPresentation,
+  NrPrbError,
+  type NrPrbErrorCode,
+  type NrPrbRecoveryAction,
+} from "./errors";
+import {
   createCsvTemplate,
   CSV_TEMPLATE_FILENAMES,
   type CsvTemplateKind,
@@ -33,6 +40,43 @@ import type {
 import { ParserWorkerClient } from "./worker-client";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+const FAILURE_CONTEXT_BY_CODE: Record<NrPrbErrorCode, NrPrbUsageContext> = {
+  FILE_REQUIRED: "mapping_required",
+  FILE_TOO_LARGE: "file_too_large",
+  UNSUPPORTED_FILE_TYPE: "unsupported_file_type",
+  EMPTY_FILE: "empty_file",
+  DELIMITER_NOT_DETECTED: "invalid_file_structure",
+  CSV_QUOTE_UNCLOSED: "malformed_csv",
+  NO_DATA_ROWS: "invalid_file_structure",
+  NO_COLUMNS: "invalid_file_structure",
+  ROW_LIMIT_EXCEEDED: "invalid_file_structure",
+  WORKBOOK_UNREADABLE: "workbook_unreadable",
+  NO_WORKSHEETS: "workbook_unreadable",
+  SHEET_UNAVAILABLE: "worksheet_unreadable",
+  SHEET_UNREADABLE: "worksheet_unreadable",
+  SESSION_EXPIRED: "worksheet_unreadable",
+  WIDE_PRB_MAPPING_REQUIRED: "mapping_required",
+  LONG_MAPPING_REQUIRED: "mapping_required",
+  MEASUREMENT_LIMIT: "measurement_limit",
+  NO_VALID_MEASUREMENTS: "no_valid_measurements",
+  NO_PERIOD_DATA: "period_empty",
+  INVALID_SCALE: "scale_invalid",
+  RENDER_UNAVAILABLE: "render_failed",
+  WORKER_FAILED: "worker_failed",
+  PNG_EXPORT_FAILED: "png_export_failed",
+  UNEXPECTED_FILE_ERROR: "unexpected_error",
+  UNEXPECTED_ANALYSIS_ERROR: "unexpected_error",
+};
+
+const RECOVERY_SELECTORS: Record<NrPrbRecoveryAction, string> = {
+  choose_file: "[data-error-choose-file]",
+  review_mapping: "[data-error-review-mapping]",
+  review_period: "[data-error-review-period]",
+  review_scale: "[data-error-review-scale]",
+  download_wide_template: "[data-error-template-wide]",
+  download_long_template: "[data-error-template-long]",
+};
 
 function requiredElement<T extends Element>(
   root: ParentNode,
@@ -88,12 +132,17 @@ class NrPrbVisualizer extends HTMLElement {
   private summaryChart: SummaryChartRenderer | null = null;
   private profileMode: "prb" | "period" = "prb";
   private initialized = false;
+  private activeError: NrPrbError | null = null;
 
   private reportUsage(
     action: NrPrbUsageAction,
     context: NrPrbUsageContext,
   ): void {
     dispatchNrPrbUsageEvent(this, action, context);
+  }
+
+  private reportFailure(error: NrPrbError): void {
+    this.reportUsage("analysis_failed", FAILURE_CONTEXT_BY_CODE[error.code]);
   }
 
   connectedCallback(): void {
@@ -155,6 +204,30 @@ class NrPrbVisualizer extends HTMLElement {
       const file = event.dataTransfer?.files[0];
       if (file) void this.inspectFile(file);
     });
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-error-choose-file]",
+    ).addEventListener("click", () => fileInput.click());
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-error-review-mapping]",
+    ).addEventListener("click", () => this.focusRecoveryTarget("mapping"));
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-error-review-period]",
+    ).addEventListener("click", () => this.focusRecoveryTarget("period"));
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-error-review-scale]",
+    ).addEventListener("click", () => this.focusRecoveryTarget("scale"));
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-error-template-wide]",
+    ).addEventListener("click", () => this.downloadCsvTemplate("wide"));
+    requiredElement<HTMLButtonElement>(
+      this,
+      "[data-error-template-long]",
+    ).addEventListener("click", () => this.downloadCsvTemplate("long"));
 
     requiredElement<HTMLButtonElement>(this, "[data-demo]").addEventListener(
       "click",
@@ -245,7 +318,7 @@ class NrPrbVisualizer extends HTMLElement {
       this,
       "[data-apply-filters]",
     ).addEventListener("click", () => {
-      this.applyAnalysis(false);
+      this.applyAnalysis(false, true, true);
     });
     requiredElement<HTMLButtonElement>(this, "[data-fit]").addEventListener(
       "click",
@@ -297,8 +370,9 @@ class NrPrbVisualizer extends HTMLElement {
   private async inspectFile(file: File): Promise<void> {
     this.hideError();
     if (file.size > MAX_FILE_BYTES) {
-      this.showError("The file exceeds the 25 MB browser safety limit.");
-      this.reportUsage("analysis_failed", "file_too_large");
+      const error = new NrPrbError("FILE_TOO_LARGE");
+      this.showError(error, true);
+      this.reportFailure(error);
       return;
     }
     const lowerName = file.name.toLowerCase();
@@ -308,10 +382,9 @@ class NrPrbVisualizer extends HTMLElement {
         ? "csv"
         : null;
     if (!kind) {
-      this.showError(
-        "Select a CSV or XLSX file. Other file types are not processed.",
-      );
-      this.reportUsage("analysis_failed", "unsupported_file_type");
+      const error = new NrPrbError("UNSUPPORTED_FILE_TYPE");
+      this.showError(error, true);
+      this.reportFailure(error);
       return;
     }
     this.parser ??= new ParserWorkerClient();
@@ -329,11 +402,10 @@ class NrPrbVisualizer extends HTMLElement {
       this.finishProgress();
       this.reportUsage("file_ready", "local_file");
     } catch (error) {
-      this.finishProgress();
-      this.showError(
-        error instanceof Error ? error.message : "The file could not be read.",
-      );
-      this.reportUsage("analysis_failed", "file_read_failed");
+      this.stopProgress();
+      const localError = asNrPrbError(error, "UNEXPECTED_FILE_ERROR");
+      this.showError(localError, true);
+      this.reportFailure(localError);
     }
   }
 
@@ -351,13 +423,10 @@ class NrPrbVisualizer extends HTMLElement {
       this.renderInspection(inspection);
       this.finishProgress();
     } catch (error) {
-      this.finishProgress();
-      this.showError(
-        error instanceof Error
-          ? error.message
-          : "The worksheet could not be read.",
-      );
-      this.reportUsage("analysis_failed", "worksheet_read_failed");
+      this.stopProgress();
+      const localError = asNrPrbError(error, "SHEET_UNREADABLE");
+      this.showError(localError, true);
+      this.reportFailure(localError);
     }
   }
 
@@ -491,8 +560,7 @@ class NrPrbVisualizer extends HTMLElement {
   }
 
   private mappingFromControls(): ColumnMapping {
-    if (!this.inspection)
-      throw new Error("Open a file before generating the heatmap.");
+    if (!this.inspection) throw new NrPrbError("FILE_REQUIRED");
     const format = requiredElement<HTMLSelectElement>(this, "[data-format]")
       .value as "wide" | "long";
     const selectedNumber = (selector: string): number | null => {
@@ -516,7 +584,8 @@ class NrPrbVisualizer extends HTMLElement {
 
   private async normalizeAndAnalyze(): Promise<void> {
     if (!this.parser || !this.inspection) {
-      this.showError("Open a CSV or XLSX file first.");
+      const error = new NrPrbError("FILE_REQUIRED");
+      this.showError(error, true);
       return;
     }
     this.hideError();
@@ -531,18 +600,15 @@ class NrPrbVisualizer extends HTMLElement {
       );
       this.normalization = result;
       this.measurements = result.measurements;
-      if (this.prepareResults()) {
+      if (this.prepareResults(true)) {
         this.reportUsage("analysis_completed", "local_file");
       }
       this.finishProgress();
     } catch (error) {
-      this.finishProgress();
-      this.showError(
-        error instanceof Error
-          ? error.message
-          : "The selected mapping is invalid.",
-      );
-      this.reportUsage("analysis_failed", "mapping_invalid");
+      this.stopProgress();
+      const localError = asNrPrbError(error, "UNEXPECTED_ANALYSIS_ERROR");
+      this.showError(localError, true);
+      this.reportFailure(localError);
     } finally {
       button.disabled = false;
     }
@@ -564,13 +630,13 @@ class NrPrbVisualizer extends HTMLElement {
     requiredElement<HTMLSelectElement>(this, "[data-unit]").value = "dbm";
     requiredElement<HTMLInputElement>(this, "[data-threshold]").value = "-95";
     requiredElement<HTMLElement>(this, "[data-mapping]").hidden = true;
-    if (this.prepareResults()) {
+    if (this.prepareResults(false)) {
       this.reportUsage("demo_loaded", "demo");
       this.reportUsage("analysis_completed", "demo");
     }
   }
 
-  private prepareResults(): boolean {
+  private prepareResults(reportFailure: boolean): boolean {
     const results = requiredElement<HTMLElement>(this, "[data-results]");
     results.hidden = false;
     requiredElement<HTMLInputElement>(this, "[data-overview-toggle]").checked =
@@ -585,8 +651,10 @@ class NrPrbVisualizer extends HTMLElement {
     this.profileMode = "prb";
     this.updateProfileControls();
     this.analysis = null;
-    const completed = this.applyAnalysis(false);
-    results.scrollIntoView({ behavior: "smooth", block: "start" });
+    const completed = this.applyAnalysis(false, true, reportFailure);
+    results.hidden = !completed;
+    if (completed)
+      results.scrollIntoView({ behavior: "smooth", block: "start" });
     return completed;
   }
 
@@ -627,7 +695,11 @@ class NrPrbVisualizer extends HTMLElement {
     return custom.slice(0, 24) || "units";
   }
 
-  private applyAnalysis(preserveView: boolean, reaggregate = true): boolean {
+  private applyAnalysis(
+    preserveView: boolean,
+    reaggregate = true,
+    reportFailure = false,
+  ): boolean {
     if (this.measurements.length === 0) return false;
     try {
       const options = this.analysisOptions();
@@ -640,8 +712,7 @@ class NrPrbVisualizer extends HTMLElement {
           this.aggregatedByCell.set(point.cell, cellPoints);
         });
       }
-      if (this.aggregated.length === 0)
-        throw new Error("No measurements remain inside the selected period.");
+      if (this.aggregated.length === 0) throw new NrPrbError("NO_PERIOD_DATA");
       const cells = [...this.aggregatedByCell.keys()].sort((left, right) =>
         left.localeCompare(right),
       );
@@ -672,14 +743,12 @@ class NrPrbVisualizer extends HTMLElement {
       this.renderAffectedTable(this.analysis, options);
       this.renderStatus();
       this.renderOverview();
+      this.hideError();
       return true;
     } catch (error) {
-      this.showError(
-        error instanceof Error
-          ? error.message
-          : "The visualization could not be updated.",
-      );
-      this.reportUsage("analysis_failed", "analysis_failed");
+      const localError = asNrPrbError(error, "UNEXPECTED_ANALYSIS_ERROR");
+      this.showError(localError, reportFailure);
+      if (reportFailure) this.reportFailure(localError);
       return false;
     }
   }
@@ -751,7 +820,7 @@ class NrPrbVisualizer extends HTMLElement {
         manualMaximum === null ||
         manualMinimum >= manualMaximum
       ) {
-        throw new Error("Manual scale minimum must be lower than its maximum.");
+        throw new NrPrbError("INVALID_SCALE");
       }
       scaleMin = manualMinimum;
       scaleMax = manualMaximum;
@@ -900,10 +969,9 @@ class NrPrbVisualizer extends HTMLElement {
         this.reportUsage("export_completed", "png");
       }
     } catch (error) {
-      this.showError(
-        error instanceof Error ? error.message : "PNG export failed.",
-      );
-      this.reportUsage("analysis_failed", "png_export_failed");
+      const localError = asNrPrbError(error, "PNG_EXPORT_FAILED");
+      this.showError(localError, true);
+      this.reportFailure(localError);
     }
   }
 
@@ -960,16 +1028,74 @@ class NrPrbVisualizer extends HTMLElement {
     }, 500);
   }
 
-  private showError(message: string): void {
-    const error = requiredElement<HTMLElement>(this, "[data-error]");
-    error.textContent = message;
-    error.hidden = false;
+  private stopProgress(): void {
+    const progress = requiredElement<HTMLElement>(this, "[data-progress]");
+    requiredElement<HTMLElement>(this, "[data-progress-bar]").style.width = "0";
+    requiredElement<HTMLElement>(this, "[data-progress-label]").textContent =
+      "Local processing stopped";
+    progress.hidden = true;
+  }
+
+  private focusRecoveryTarget(area: "mapping" | "period" | "scale"): void {
+    const sectionSelector =
+      area === "period" ? "[data-results]" : "[data-mapping]";
+    const section = requiredElement<HTMLElement>(this, sectionSelector);
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+    const presentation = this.activeError
+      ? errorPresentation(this.activeError.code)
+      : null;
+    const fallbackSelector =
+      area === "period"
+        ? "[data-start]"
+        : area === "scale"
+          ? "[data-scale-min]"
+          : "[data-format]";
+    const target = this.querySelector<HTMLElement>(
+      presentation?.focusSelector ?? fallbackSelector,
+    );
+    window.setTimeout(() => target?.focus(), 250);
+  }
+
+  private showError(error: NrPrbError, focus = false): void {
+    const panel = requiredElement<HTMLElement>(this, "[data-error]");
+    const presentation = errorPresentation(error.code);
+    this.activeError = error;
+    panel.dataset.activeError = error.code;
+    requiredElement<HTMLElement>(this, "[data-error-title]").textContent =
+      presentation.title;
+    requiredElement<HTMLElement>(this, "[data-error-code]").textContent =
+      presentation.displayCode;
+    requiredElement<HTMLElement>(this, "[data-error-message]").textContent =
+      presentation.message;
+    const steps = requiredElement<HTMLUListElement>(this, "[data-error-steps]");
+    steps.replaceChildren(
+      ...presentation.steps.map((step) => {
+        const item = document.createElement("li");
+        item.textContent = step;
+        return item;
+      }),
+    );
+    steps.hidden = presentation.steps.length === 0;
+    Object.entries(RECOVERY_SELECTORS).forEach(([action, selector]) => {
+      requiredElement<HTMLButtonElement>(this, selector).hidden =
+        !presentation.recovery.includes(action as NrPrbRecoveryAction);
+    });
+    requiredElement<HTMLElement>(this, "[data-error-actions]").hidden =
+      presentation.recovery.length === 0;
+    panel.hidden = false;
+    if (focus) {
+      window.requestAnimationFrame(() => {
+        panel.focus({ preventScroll: true });
+        panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    }
   }
 
   private hideError(): void {
-    const error = requiredElement<HTMLElement>(this, "[data-error]");
-    error.textContent = "";
-    error.hidden = true;
+    const panel = requiredElement<HTMLElement>(this, "[data-error]");
+    this.activeError = null;
+    delete panel.dataset.activeError;
+    panel.hidden = true;
   }
 }
 

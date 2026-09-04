@@ -5,6 +5,7 @@ import type {
   WorkerRequest,
   WorkerResponse,
 } from "./types";
+import { NrPrbError } from "./errors";
 
 type WorkerRequestPayload =
   | Omit<Extract<WorkerRequest, { type: "inspect" }>, "id">
@@ -41,14 +42,12 @@ export class ParserWorkerClient {
         }
         this.pending.delete(response.id);
         if (response.type === "error")
-          request.reject(new Error(response.error.message));
+          request.reject(new NrPrbError(response.error.code));
         else request.resolve(response.result);
       },
     );
     this.worker.addEventListener("error", () => {
-      const error = new Error(
-        "The local parser stopped unexpectedly. Reopen the file and try again.",
-      );
+      const error = new NrPrbError("WORKER_FAILED");
       this.pending.forEach((request) => request.reject(error));
       this.pending.clear();
     });

@@ -9,6 +9,7 @@ import type {
 import { parseDelimited, detectDelimiter } from "./lib/csv";
 import { describeColumns, detectMapping } from "./lib/detect";
 import { normalizeMatrix } from "./lib/normalize";
+import { asNrPrbError, NrPrbError, type NrPrbErrorCode } from "./errors";
 
 interface WorkbookState {
   file: File;
@@ -30,11 +31,11 @@ function progress(id: number, value: number, message: string): void {
   respond({ id, type: "progress", value, message });
 }
 
-function safeError(error: unknown): { code: string; message: string } {
-  if (error instanceof Error) {
-    return { code: "PARSE_ERROR", message: error.message.slice(0, 500) };
-  }
-  return { code: "PARSE_ERROR", message: "The file could not be parsed." };
+function safeError(
+  error: unknown,
+  fallback: NrPrbErrorCode,
+): { code: NrPrbErrorCode } {
+  return { code: asNrPrbError(error, fallback).code };
 }
 
 function createToken(): string {
@@ -56,13 +57,9 @@ function inspectMatrix(
   matrix: CellValue[][],
   delimiter: string | null,
 ): InspectionResult {
-  if (matrix.length < 2)
-    throw new Error(
-      "The selected sheet must contain a header row and at least one data row.",
-    );
+  if (matrix.length < 2) throw new NrPrbError("NO_DATA_ROWS");
   const headers = matrix[0] ?? [];
-  if (headers.length === 0)
-    throw new Error("The selected sheet has no columns.");
+  if (headers.length === 0) throw new NrPrbError("NO_COLUMNS");
   const suggestion = detectMapping(headers);
   const warnings: string[] = [];
   if (matrix.length > 100_000)
@@ -95,7 +92,7 @@ async function handleInspect(
   request: Extract<WorkerRequest, { type: "inspect" }>,
 ): Promise<void> {
   if (request.file.size > MAX_FILE_BYTES)
-    throw new Error("The file exceeds the 25 MB browser safety limit.");
+    throw new NrPrbError("FILE_TOO_LARGE");
   progress(request.id, 5, "Reading file locally");
   const token = createToken();
   let sheets: string[];
@@ -112,10 +109,14 @@ async function handleInspect(
     activeSheet = "CSV";
   } else {
     progress(request.id, 20, "Loading the spreadsheet parser");
-    const workbookSheets = await readXlsxWorkbook(request.file);
+    let workbookSheets: Array<{ sheet: string; data: CellValue[][] }>;
+    try {
+      workbookSheets = await readXlsxWorkbook(request.file);
+    } catch {
+      throw new NrPrbError("WORKBOOK_UNREADABLE");
+    }
     const firstSheet = workbookSheets[0];
-    if (!firstSheet)
-      throw new Error("The workbook has no readable worksheets.");
+    if (!firstSheet) throw new NrPrbError("NO_WORKSHEETS");
     sheets = workbookSheets.map((sheet) => sheet.sheet);
     activeSheet = firstSheet.sheet;
     progress(request.id, 55, "Reading workbook worksheets");
@@ -163,13 +164,11 @@ function handleSheet(request: Extract<WorkerRequest, { type: "sheet" }>): void {
     state.kind !== "xlsx" ||
     !state.sheets.includes(request.sheet)
   ) {
-    throw new Error(
-      "The selected worksheet is no longer available. Reopen the file.",
-    );
+    throw new NrPrbError("SHEET_UNAVAILABLE");
   }
   progress(request.id, 20, "Reading worksheet");
   const matrix = state.matrices.get(request.sheet);
-  if (!matrix) throw new Error("The selected worksheet could not be read.");
+  if (!matrix) throw new NrPrbError("SHEET_UNREADABLE");
   state.activeSheet = request.sheet;
   progress(request.id, 85, "Preparing mapping preview");
   respond({
@@ -189,10 +188,9 @@ function handleNormalize(
   request: Extract<WorkerRequest, { type: "normalize" }>,
 ): void {
   const state = workbooks.get(request.token);
-  if (!state)
-    throw new Error("The local file session expired. Reopen the file.");
+  if (!state) throw new NrPrbError("SESSION_EXPIRED");
   const matrix = state.matrices.get(state.activeSheet);
-  if (!matrix) throw new Error("No worksheet is available for processing.");
+  if (!matrix) throw new NrPrbError("SHEET_UNREADABLE");
   progress(request.id, 15, "Validating values");
   const result = normalizeMatrix(matrix, request.mapping);
   progress(request.id, 90, "Finalizing browser-only dataset");
@@ -209,7 +207,15 @@ workerScope.addEventListener(
         else if (request.type === "sheet") handleSheet(request);
         else handleNormalize(request);
       } catch (error) {
-        respond({ id: request.id, type: "error", error: safeError(error) });
+        const fallback =
+          request.type === "normalize"
+            ? "UNEXPECTED_ANALYSIS_ERROR"
+            : "UNEXPECTED_FILE_ERROR";
+        respond({
+          id: request.id,
+          type: "error",
+          error: safeError(error, fallback),
+        });
       }
     })();
   },
