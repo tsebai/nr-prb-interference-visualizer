@@ -18,6 +18,14 @@ describe("privacy and source safety", () => {
     });
   });
 
+  it("does not propagate raw parser messages across the worker boundary", () => {
+    const source = ["src/worker.ts", "src/worker-client.ts"]
+      .map((file) => fs.readFileSync(path.join(root, file), "utf8"))
+      .join("\n");
+    expect(source).not.toMatch(/error\.message|response\.error\.message/);
+    expect(source).not.toMatch(/slice\(0,\s*500\)/);
+  });
+
   it("does not send imported data through fetch, XHR, or beacon APIs", () => {
     const source = ["src/main.ts", "src/worker.ts", "src/worker-client.ts"]
       .map((file) => fs.readFileSync(path.join(root, file), "utf8"))

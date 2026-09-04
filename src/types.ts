@@ -1,3 +1,5 @@
+import type { NrPrbErrorCode } from "./errors";
+
 export type DataFormat = "wide" | "long";
 export type UnitMode = "dbm" | "db" | "raw" | "custom";
 export type DecimalMode = "auto" | "point" | "comma";
@@ -65,8 +67,7 @@ export interface NormalizationResult {
 }
 
 export interface WorkerError {
-  code: string;
-  message: string;
+  code: NrPrbErrorCode;
 }
 
 export type WorkerRequest =

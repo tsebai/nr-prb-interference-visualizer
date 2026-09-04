@@ -43,6 +43,8 @@ document.addEventListener("nr-prb-usage", (event) => {
 
 Supported actions are `file_ready`, `demo_loaded`, `analysis_completed`, `analysis_failed`, `template_downloaded`, and `export_completed`. Context values are fixed in `src/events.ts`. The engine itself does not make a network request when emitting an event.
 
+Failure contexts identify only a bounded category such as `malformed_csv`, `mapping_required`, `no_valid_measurements`, or `scale_invalid`. They are emitted after an explicit user action. Automatic display refreshes do not emit additional failure events.
+
 ## Official site pinning
 
 The HiCellTek site vendors the release assets instead of using an iframe or remote CDN. An `upstream.json` file records the package version, source commit, repository, and SHA-256 hash of each asset. The site validation command recomputes these hashes before a build.

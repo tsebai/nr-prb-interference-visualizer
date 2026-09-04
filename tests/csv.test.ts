@@ -6,6 +6,7 @@ import {
   protectCsvCell,
   rowsToCsv,
 } from "../src/lib/csv";
+import { NrPrbError } from "../src/errors";
 
 describe("CSV parsing", () => {
   it("detects comma, semicolon, and tab delimiters", () => {
@@ -19,6 +20,27 @@ describe("CSV parsing", () => {
       ["a", "b"],
       ["x,y", 'say "hello"'],
     ]);
+  });
+
+  it("returns stable codes for empty, malformed, and incomplete CSV input", () => {
+    const codeFrom = (operation: () => unknown): string => {
+      try {
+        operation();
+        return "NO_ERROR";
+      } catch (error) {
+        expect(error).toBeInstanceOf(NrPrbError);
+        return (error as NrPrbError).code;
+      }
+    };
+
+    expect(codeFrom(() => detectDelimiter("\n\r\n"))).toBe("EMPTY_FILE");
+    expect(codeFrom(() => detectDelimiter("one column\nsecond row"))).toBe(
+      "DELIMITER_NOT_DETECTED",
+    );
+    expect(codeFrom(() => parseDelimited('a,b\n"not closed,1', ","))).toBe(
+      "CSV_QUOTE_UNCLOSED",
+    );
+    expect(codeFrom(() => parseDelimited("a,b", ","))).toBe("NO_DATA_ROWS");
   });
 
   it("handles point and comma decimals when unambiguous", () => {

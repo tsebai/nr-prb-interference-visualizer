@@ -18,10 +18,19 @@ export type NrPrbUsageContext =
   | "print"
   | "file_too_large"
   | "unsupported_file_type"
-  | "file_read_failed"
-  | "worksheet_read_failed"
-  | "mapping_invalid"
-  | "analysis_failed"
+  | "empty_file"
+  | "invalid_file_structure"
+  | "malformed_csv"
+  | "workbook_unreadable"
+  | "worksheet_unreadable"
+  | "mapping_required"
+  | "measurement_limit"
+  | "no_valid_measurements"
+  | "period_empty"
+  | "scale_invalid"
+  | "render_failed"
+  | "worker_failed"
+  | "unexpected_error"
   | "png_export_failed";
 
 export interface NrPrbUsageEventDetail {

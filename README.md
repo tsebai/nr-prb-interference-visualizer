@@ -116,7 +116,13 @@ npm run test:e2e
 npm run audit
 ```
 
-The test suite covers format and PRB detection, CSV and XLSX parsing, separators and decimals, dBm and raw averaging, median and P95, missing values, thresholds, multiple cells, snapshots, invalid files, safe CSV exports, browser interaction, responsive full-bandwidth fitting, keyboard use, and network privacy sentinels.
+The test suite covers format and PRB detection, CSV and XLSX parsing, separators and decimals, dBm and raw averaging, median and P95, missing values, thresholds, multiple cells, snapshots, invalid files, actionable error recovery, safe CSV exports, browser interaction, responsive full-bandwidth fitting, keyboard use, and network privacy sentinels.
+
+## Error handling
+
+Invalid input is shown as a fixed `NR-*` error code with a short explanation, corrective steps, and the relevant recovery control. Cases include empty or malformed CSV files, unreadable XLSX workbooks, incomplete column mappings, datasets with no valid measurements, browser safety limits, empty time filters, invalid manual scales, worker failures, and PNG export failures.
+
+Raw parser messages never cross the Web Worker boundary and are never included in usage events. Only a fixed allowlisted failure context can be exposed to a consenting host analytics integration. See [Error handling](docs/error-handling.md).
 
 ## Reuse and site integration
 

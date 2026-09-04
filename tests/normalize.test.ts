@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeMatrix } from "../src/lib/normalize";
+import { NrPrbError } from "../src/errors";
 import type { ColumnMapping } from "../src/types";
 
 const wideMapping: ColumnMapping = {
@@ -107,14 +108,18 @@ describe("normalization", () => {
   });
 
   it("skips invalid timestamps and rejects files with no valid values", () => {
-    expect(() =>
+    try {
       normalizeMatrix(
         [
           ["timestamp", "cell_id", "PRB_0", "PRB_7"],
           ["invalid", "CELL_A", -110, -90],
         ],
         wideMapping,
-      ),
-    ).toThrow("No valid PRB measurements");
+      );
+      throw new Error("Expected normalization to fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(NrPrbError);
+      expect((error as NrPrbError).code).toBe("NO_VALID_MEASUREMENTS");
+    }
   });
 });

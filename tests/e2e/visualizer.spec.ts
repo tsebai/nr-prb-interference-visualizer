@@ -252,6 +252,176 @@ test("keeps imported filename and values out of network requests", async ({
   expect(networkText).not.toContain("-87.6543");
 });
 
+test("explains malformed CSV input without exposing private input", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto("./");
+  await page.evaluate(() => {
+    const events: Array<{ action: string; context: string }> = [];
+    document.addEventListener("nr-prb-usage", (event) => {
+      const detail = (event as CustomEvent).detail as {
+        action: string;
+        context: string;
+      };
+      events.push(detail);
+    });
+    (window as typeof window & { __errorEvents: typeof events }).__errorEvents =
+      events;
+  });
+
+  await page.locator("[data-file-input]").setInputFiles({
+    name: "PRIVATE_NETWORK_SENTINEL.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from('timestamp,PRB_0\n"2026-08-31T08:00:00Z,-87.6543'),
+  });
+
+  const alert = page.getByRole("alert");
+  await expect(alert).toBeVisible();
+  await expect(alert).toContainText("CSV quoting is incomplete");
+  await expect(alert).toContainText("NR-CSV-003");
+  await expect(page.locator("[data-progress]")).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Choose another file" }),
+  ).toBeVisible();
+  const events = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __errorEvents: Array<{ action: string; context: string }>;
+        }
+      ).__errorEvents,
+  );
+  expect(events).toEqual([
+    { action: "analysis_failed", context: "malformed_csv" },
+  ]);
+  expect(JSON.stringify(events)).not.toContain("PRIVATE_NETWORK_SENTINEL");
+  expect(JSON.stringify(events)).not.toContain("-87.6543");
+  const pageWidth = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(pageWidth.scrollWidth).toBe(pageWidth.clientWidth);
+});
+
+test("distinguishes common file failures with specific recovery messages", async ({
+  page,
+}) => {
+  await page.goto("./");
+  const cases = [
+    {
+      name: "counters.json",
+      mimeType: "application/json",
+      content: "{}",
+      code: "UNSUPPORTED_FILE_TYPE",
+      title: "Unsupported file type",
+    },
+    {
+      name: "empty.csv",
+      mimeType: "text/csv",
+      content: "",
+      code: "EMPTY_FILE",
+      title: "The CSV file is empty",
+    },
+    {
+      name: "headers-only.csv",
+      mimeType: "text/csv",
+      content: "timestamp,PRB_0",
+      code: "NO_DATA_ROWS",
+      title: "No measurement rows were found",
+    },
+    {
+      name: "damaged.xlsx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      content: "not an xlsx archive",
+      code: "WORKBOOK_UNREADABLE",
+      title: "Workbook could not be read",
+    },
+  ];
+
+  for (const item of cases) {
+    await page.locator("[data-file-input]").setInputFiles({
+      name: item.name,
+      mimeType: item.mimeType,
+      buffer: Buffer.from(item.content),
+    });
+    await expect(page.locator("[data-error]")).toHaveAttribute(
+      "data-active-error",
+      item.code,
+    );
+    await expect(page.getByRole("alert")).toContainText(item.title);
+  }
+});
+
+test("guides incomplete long-format mapping back to the exact control", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.locator("[data-file-input]").setInputFiles({
+    name: "incomplete-mapping.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "timestamp,unmapped_index,unmapped_counter\n2026-08-31T08:00:00Z,0,-105",
+    ),
+  });
+  await expect(page.locator("[data-format]")).toHaveValue("long");
+  await page.getByRole("button", { name: "Generate heatmap" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Long-format mapping is incomplete",
+  );
+  await expect(page.getByRole("alert")).toContainText("NR-MAP-002");
+  await page.getByRole("button", { name: "Review column mapping" }).click();
+  await expect(page.locator("[data-prb-column]")).toBeFocused();
+});
+
+test("reports only explicit analysis failures, not automatic control refreshes", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.evaluate(() => {
+    const events: Array<{ action: string; context: string }> = [];
+    document.addEventListener("nr-prb-usage", (event) => {
+      const detail = (event as CustomEvent).detail as {
+        action: string;
+        context: string;
+      };
+      events.push(detail);
+    });
+    (window as typeof window & { __errorEvents: typeof events }).__errorEvents =
+      events;
+  });
+  await page
+    .locator("[data-file-input]")
+    .setInputFiles(path.join(root, "samples", "persistent-273-prb.csv"));
+  await page.getByRole("button", { name: "Generate heatmap" }).click();
+  await page.locator("[data-scale-mode]").selectOption("manual");
+  await expect(page.getByRole("alert")).toContainText(
+    "Manual color scale is invalid",
+  );
+
+  let failures = await page.evaluate(() =>
+    (
+      window as typeof window & {
+        __errorEvents: Array<{ action: string; context: string }>;
+      }
+    ).__errorEvents.filter((event) => event.action === "analysis_failed"),
+  );
+  expect(failures).toEqual([]);
+
+  await page.getByRole("button", { name: "Apply period filter" }).click();
+  failures = await page.evaluate(() =>
+    (
+      window as typeof window & {
+        __errorEvents: Array<{ action: string; context: string }>;
+      }
+    ).__errorEvents.filter((event) => event.action === "analysis_failed"),
+  );
+  expect(failures).toEqual([
+    { action: "analysis_failed", context: "scale_invalid" },
+  ]);
+});
+
 test("supports keyboard navigation to the import and heatmap controls", async ({
   page,
 }) => {

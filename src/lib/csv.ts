@@ -1,11 +1,12 @@
 import type { CellValue, DecimalMode } from "../types";
+import { NrPrbError, type NrPrbErrorCode } from "../errors";
 
 const CANDIDATE_DELIMITERS = [",", ";", "\t"] as const;
 const MISSING_MARKERS = new Set(["", "na", "n/a", "null", "none", "-"]);
 
-export class CsvParseError extends Error {
-  constructor(message: string) {
-    super(message);
+export class CsvParseError extends NrPrbError {
+  constructor(code: NrPrbErrorCode) {
+    super(code);
     this.name = "CsvParseError";
   }
 }
@@ -36,7 +37,7 @@ export function detectDelimiter(text: string): string {
     .slice(0, 20);
 
   if (lines.length === 0) {
-    throw new CsvParseError("The file is empty.");
+    throw new CsvParseError("EMPTY_FILE");
   }
 
   const ranked = CANDIDATE_DELIMITERS.map((delimiter) => {
@@ -59,9 +60,7 @@ export function detectDelimiter(text: string): string {
   );
 
   if (!ranked[0] || ranked[0].score === 0) {
-    throw new CsvParseError(
-      "No comma, semicolon, or tabular delimiter could be detected.",
-    );
+    throw new CsvParseError("DELIMITER_NOT_DETECTED");
   }
   return ranked[0].delimiter;
 }
@@ -86,9 +85,7 @@ export function parseDelimited(
     if (row.some((value) => value.length > 0)) {
       rows.push(row);
       if (rows.length > maxRows) {
-        throw new CsvParseError(
-          `The file exceeds the ${maxRows.toLocaleString()} row limit.`,
-        );
+        throw new CsvParseError("ROW_LIMIT_EXCEEDED");
       }
     }
     row = [];
@@ -122,15 +119,13 @@ export function parseDelimited(
   }
 
   if (quoted) {
-    throw new CsvParseError("A quoted CSV field is not closed.");
+    throw new CsvParseError("CSV_QUOTE_UNCLOSED");
   }
   if (field.length > 0 || row.length > 0) {
     pushRow();
   }
   if (rows.length < 2) {
-    throw new CsvParseError(
-      "The file must contain a header row and at least one data row.",
-    );
+    throw new CsvParseError("NO_DATA_ROWS");
   }
   return rows;
 }
