@@ -1,6 +1,6 @@
 {
   "name": "@tsebai/nr-prb-interference-visualizer",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Browser-only 5G NR PRB interference heatmap and analysis tool",
   "author": "tsebai",

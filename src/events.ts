@@ -1,6 +1,8 @@
 export const NR_PRB_USAGE_EVENT = "nr-prb-usage";
 
 export type NrPrbUsageAction =
+  | "workspace_viewed"
+  | "file_picker_opened"
   | "file_ready"
   | "demo_loaded"
   | "analysis_completed"
@@ -9,6 +11,7 @@ export type NrPrbUsageAction =
   | "export_completed";
 
 export type NrPrbUsageContext =
+  | "workspace"
   | "local_file"
   | "demo"
   | "wide"
@@ -26,6 +29,7 @@ export type NrPrbUsageContext =
   | "mapping_required"
   | "measurement_limit"
   | "no_valid_measurements"
+  | "period_invalid"
   | "period_empty"
   | "scale_invalid"
   | "render_failed"

@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.0] - 2026-09-11
+
+### Added
+
+- Immediate demo and file-import actions in the standalone introduction.
+- Privacy-safe workspace-view and file-picker funnel events for consenting host integrations.
+- A specific recovery message when the From and To date range is reversed.
+- Public `startDemo()` and `focusFileImport()` methods for native host-page calls to action.
+
+### Changed
+
+- A failed browser worker is discarded so the next file selection starts with a clean parser.
+- Previous workbook matrices are released when a new file or demo is selected.
+- File and analysis controls expose a visible busy state during local processing.
+- Error panels now confirm that the rejected file was not uploaded.
+
 ## [1.2.0] - 2026-09-04
 
 ### Added

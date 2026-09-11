@@ -44,6 +44,7 @@ export const APP_TEMPLATE = `
           <strong data-error-title>Input could not be processed</strong>
           <code data-error-code>NR-INPUT-999</code>
         </div>
+        <p class="nr-error-privacy">Nothing was uploaded. Your file remains on this device.</p>
         <p data-error-message></p>
         <ul data-error-steps></ul>
         <div class="nr-error-actions" data-error-actions>

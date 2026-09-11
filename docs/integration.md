@@ -30,6 +30,8 @@ Load the stylesheet and module, then add the element:
 
 The component uses the host's `--bg`, `--ink`, `--muted`, `--surface`, `--surface2`, `--border`, `--brand`, and `--accent` variables when present. Its operational styles are scoped to `.nr-prb-app` classes.
 
+Host pages can start the persistent 273 PRB synthetic example with `visualizer.startDemo("persistent")`. They can move keyboard focus to the local import control with `visualizer.focusFileImport()`. Both methods use the same tested workflow as the controls inside the component.
+
 ## Privacy-safe usage events
 
 The component emits a bubbling `nr-prb-usage` browser event after selected interface actions. The detail object contains only two enumerated fields, `action` and `context`. It never contains a file name, sheet name, header, cell identifier, counter value, threshold, row count, timestamp, parser message, or free-form error text.
@@ -41,7 +43,7 @@ document.addEventListener("nr-prb-usage", (event) => {
 });
 ```
 
-Supported actions are `file_ready`, `demo_loaded`, `analysis_completed`, `analysis_failed`, `template_downloaded`, and `export_completed`. Context values are fixed in `src/events.ts`. The engine itself does not make a network request when emitting an event.
+Supported actions are `workspace_viewed`, `file_picker_opened`, `file_ready`, `demo_loaded`, `analysis_completed`, `analysis_failed`, `template_downloaded`, and `export_completed`. Context values are fixed in `src/events.ts`. The engine itself does not make a network request when emitting an event.
 
 Failure contexts identify only a bounded category such as `malformed_csv`, `mapping_required`, `no_valid_measurements`, or `scale_invalid`. They are emitted after an explicit user action. Automatic display refreshes do not emit additional failure events.
 
