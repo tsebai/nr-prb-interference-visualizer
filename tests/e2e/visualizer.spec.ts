@@ -40,6 +40,22 @@ test("loads the page and renders the 273 PRB demo without horizontal scrolling",
   expect(pageWidth.scrollWidth).toBe(pageWidth.clientWidth);
 });
 
+test("shows an immediate first action and can start the demo from the introduction", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto("./");
+  const quickDemo = page.getByRole("button", {
+    name: "Try the 273 PRB demo",
+  });
+  await expect(quickDemo).toBeVisible();
+  const box = await quickDemo.boundingBox();
+  expect(box).not.toBeNull();
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(780);
+  await quickDemo.click();
+  await expect(page.locator("[data-summary-prbs]")).toHaveText("273");
+});
+
 test("downloads empty wide and long CSV templates with the expected headers", async ({
   page,
 }) => {
@@ -354,6 +370,129 @@ test("distinguishes common file failures with specific recovery messages", async
   }
 });
 
+test("removes stale results and confirms local-only handling after a rejected file", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Try demo data" }).click();
+  await expect(page.locator("[data-results]")).toBeVisible();
+
+  await page.locator("[data-file-input]").setInputFiles({
+    name: "unsupported-private-input.json",
+    mimeType: "application/json",
+    buffer: Buffer.from("{}"),
+  });
+
+  await expect(page.locator("[data-results]")).toBeHidden();
+  await expect(page.getByRole("alert")).toContainText(
+    "Nothing was uploaded. Your file remains on this device.",
+  );
+  await expect(page.getByRole("alert")).toContainText("Unsupported file type");
+});
+
+test("explains a reversed period and returns focus to the From field", async ({
+  page,
+}) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Try demo data" }).click();
+  await page.locator("[data-start]").fill("2026-09-02T10:00");
+  await page.locator("[data-end]").fill("2026-09-01T10:00");
+  await page.getByRole("button", { name: "Apply period filter" }).click();
+  await expect(page.locator("[data-error]")).toHaveAttribute(
+    "data-active-error",
+    "INVALID_PERIOD_RANGE",
+  );
+  await expect(page.getByRole("alert")).toContainText("Date range is reversed");
+  await page.getByRole("button", { name: "Review period filter" }).click();
+  await expect(page.locator("[data-start]")).toBeFocused();
+});
+
+test("recovers when the browser worker fails to start once", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    let failOnce = true;
+    window.Worker = class FailOnceWorker extends NativeWorker {
+      constructor(scriptURL: string | URL, options?: WorkerOptions) {
+        if (failOnce) {
+          failOnce = false;
+          throw new Error("synthetic worker startup failure");
+        }
+        super(scriptURL, options);
+      }
+    };
+  });
+  await page.goto("./");
+  const sample = path.join(root, "samples", "persistent-273-prb.csv");
+  await page.locator("[data-file-input]").setInputFiles(sample);
+  await expect(page.locator("[data-error]")).toHaveAttribute(
+    "data-active-error",
+    "WORKER_FAILED",
+  );
+  await expect(page.getByRole("alert")).toContainText("Local parser stopped");
+
+  await page.locator("[data-file-input]").setInputFiles(sample);
+  await expect(
+    page.getByRole("heading", { name: "Confirm the column mapping" }),
+  ).toBeVisible();
+  await expect(page.locator("[data-error]")).toBeHidden();
+});
+
+test("emits workspace and file-picker events without input metadata", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const events: Array<{ action: string; context: string }> = [];
+    document.addEventListener("nr-prb-usage", (event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (
+        typeof detail === "object" &&
+        detail !== null &&
+        "action" in detail &&
+        "context" in detail &&
+        typeof detail.action === "string" &&
+        typeof detail.context === "string"
+      ) {
+        events.push({ action: detail.action, context: detail.context });
+      }
+    });
+    (
+      window as typeof window & { __earlyUsageEvents: typeof events }
+    ).__earlyUsageEvents = events;
+  });
+  await page.goto("./");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as typeof window & {
+              __earlyUsageEvents: Array<{ action: string; context: string }>;
+            }
+          ).__earlyUsageEvents,
+      ),
+    )
+    .toContainEqual({ action: "workspace_viewed", context: "workspace" });
+
+  const fileChooser = page.waitForEvent("filechooser");
+  await page.locator("[data-file-trigger]").click();
+  await (await fileChooser).setFiles([]);
+  const events = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __earlyUsageEvents: Array<{ action: string; context: string }>;
+        }
+      ).__earlyUsageEvents,
+  );
+  expect(events).toContainEqual({
+    action: "file_picker_opened",
+    context: "local_file",
+  });
+  expect(JSON.stringify(events)).not.toContain("filename");
+});
+
 test("guides incomplete long-format mapping back to the exact control", async ({
   page,
 }) => {
@@ -428,6 +567,10 @@ test("supports keyboard navigation to the import and heatmap controls", async ({
   await page.goto("./");
   await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(page.locator("[data-standalone-demo]")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("[data-standalone-file]")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.locator("[data-file-trigger]")).toBeFocused();
   await page.locator("[data-demo-kind]").focus();

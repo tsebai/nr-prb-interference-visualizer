@@ -28,6 +28,7 @@ export class ParserWorkerClient {
     PendingRequest<InspectionResult | NormalizationResult>
   >();
   private nextId = 1;
+  private failed = false;
 
   constructor() {
     this.worker.addEventListener(
@@ -47,6 +48,8 @@ export class ParserWorkerClient {
       },
     );
     this.worker.addEventListener("error", () => {
+      this.failed = true;
+      this.worker.terminate();
       const error = new NrPrbError("WORKER_FAILED");
       this.pending.forEach((request) => request.reject(error));
       this.pending.clear();
@@ -87,6 +90,7 @@ export class ParserWorkerClient {
   }
 
   terminate(): void {
+    this.failed = true;
     this.worker.terminate();
     this.pending.clear();
   }
@@ -95,6 +99,7 @@ export class ParserWorkerClient {
     request: WorkerRequestPayload,
     onProgress?: (value: number, message: string) => void,
   ): Promise<T> {
+    if (this.failed) return Promise.reject(new NrPrbError("WORKER_FAILED"));
     const id = this.nextId;
     this.nextId += 1;
     return new Promise<T>((resolve, reject) => {
@@ -103,7 +108,14 @@ export class ParserWorkerClient {
         reject,
         progress: onProgress,
       });
-      this.worker.postMessage({ ...request, id });
+      try {
+        this.worker.postMessage({ ...request, id });
+      } catch {
+        this.pending.delete(id);
+        this.failed = true;
+        this.worker.terminate();
+        reject(new NrPrbError("WORKER_FAILED"));
+      }
     });
   }
 }

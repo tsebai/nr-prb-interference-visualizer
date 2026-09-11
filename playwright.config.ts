@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const port = Number(process.env.NR_PRB_TEST_PORT ?? 43173);
+const baseURL = `http://127.0.0.1:${port}/tools/nr-prb-interference-visualizer/`;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -8,7 +11,7 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:4173/tools/nr-prb-interference-visualizer/",
+    baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
@@ -17,8 +20,8 @@ export default defineConfig({
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
-    command: "npm run dev -- --port 4173",
-    url: "http://127.0.0.1:4173/tools/nr-prb-interference-visualizer/",
+    command: `npm run dev -- --port ${port} --strictPort`,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

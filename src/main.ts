@@ -60,6 +60,7 @@ const FAILURE_CONTEXT_BY_CODE: Record<NrPrbErrorCode, NrPrbUsageContext> = {
   LONG_MAPPING_REQUIRED: "mapping_required",
   MEASUREMENT_LIMIT: "measurement_limit",
   NO_VALID_MEASUREMENTS: "no_valid_measurements",
+  INVALID_PERIOD_RANGE: "period_invalid",
   NO_PERIOD_DATA: "period_empty",
   INVALID_SCALE: "scale_invalid",
   RENDER_UNAVAILABLE: "render_failed",
@@ -133,6 +134,9 @@ class NrPrbVisualizer extends HTMLElement {
   private profileMode: "prb" | "period" = "prb";
   private initialized = false;
   private activeError: NrPrbError | null = null;
+  private workspaceObserver: IntersectionObserver | null = null;
+  private workspaceReported = false;
+  private progressHideTimer: number | null = null;
 
   private reportUsage(
     action: NrPrbUsageAction,
@@ -151,11 +155,39 @@ class NrPrbVisualizer extends HTMLElement {
     this.innerHTML = APP_TEMPLATE;
     this.initializeRenderers();
     this.bindEvents();
+    this.observeWorkspace();
   }
 
   disconnectedCallback(): void {
     this.parser?.terminate();
     this.parser = null;
+    this.workspaceObserver?.disconnect();
+    this.workspaceObserver = null;
+    if (this.progressHideTimer !== null) {
+      window.clearTimeout(this.progressHideTimer);
+      this.progressHideTimer = null;
+    }
+  }
+
+  startDemo(kind: DemoKind = "persistent"): void {
+    if (!this.initialized || this.hasAttribute("aria-busy")) return;
+    const allowedKinds: DemoKind[] = ["persistent", "broadband", "multicell"];
+    const safeKind = allowedKinds.includes(kind) ? kind : "persistent";
+    requiredElement<HTMLSelectElement>(this, "[data-demo-kind]").value =
+      safeKind;
+    this.reportWorkspaceView();
+    this.loadDemo(safeKind);
+  }
+
+  focusFileImport(): void {
+    if (!this.initialized || this.hasAttribute("aria-busy")) return;
+    this.reportWorkspaceView();
+    const trigger = requiredElement<HTMLButtonElement>(
+      this,
+      "[data-file-trigger]",
+    );
+    trigger.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => trigger.focus(), 250);
   }
 
   private initializeRenderers(): void {
@@ -182,7 +214,7 @@ class NrPrbVisualizer extends HTMLElement {
       this,
       "[data-file-trigger]",
     );
-    trigger.addEventListener("click", () => fileInput.click());
+    trigger.addEventListener("click", () => this.openFilePicker(fileInput));
     fileInput.addEventListener("change", () => {
       const file = fileInput.files?.[0];
       if (file) void this.inspectFile(file);
@@ -207,7 +239,7 @@ class NrPrbVisualizer extends HTMLElement {
     requiredElement<HTMLButtonElement>(
       this,
       "[data-error-choose-file]",
-    ).addEventListener("click", () => fileInput.click());
+    ).addEventListener("click", () => this.openFilePicker(fileInput));
     requiredElement<HTMLButtonElement>(
       this,
       "[data-error-review-mapping]",
@@ -236,7 +268,7 @@ class NrPrbVisualizer extends HTMLElement {
           this,
           "[data-demo-kind]",
         ).value as DemoKind;
-        this.loadDemo(kind);
+        this.startDemo(kind);
       },
     );
     requiredElement<HTMLButtonElement>(
@@ -367,8 +399,68 @@ class NrPrbVisualizer extends HTMLElement {
     ).addEventListener("click", () => this.setProfileMode("period"));
   }
 
+  private openFilePicker(fileInput: HTMLInputElement): void {
+    fileInput.value = "";
+    this.reportWorkspaceView();
+    this.reportUsage("file_picker_opened", "local_file");
+    fileInput.click();
+  }
+
+  private observeWorkspace(): void {
+    const importSection = requiredElement<HTMLElement>(this, ".nr-import");
+    if (!("IntersectionObserver" in window)) {
+      this.reportWorkspaceView();
+      return;
+    }
+    this.workspaceObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          this.reportWorkspaceView();
+        }
+      },
+      { threshold: 0.2 },
+    );
+    this.workspaceObserver.observe(importSection);
+  }
+
+  private reportWorkspaceView(): void {
+    if (this.workspaceReported) return;
+    this.workspaceReported = true;
+    this.workspaceObserver?.disconnect();
+    this.workspaceObserver = null;
+    this.reportUsage("workspace_viewed", "workspace");
+  }
+
+  private resetForNewInput(): void {
+    this.resetParser();
+    this.inspection = null;
+    this.normalization = null;
+    this.measurements = [];
+    this.aggregated = [];
+    this.aggregatedByCell.clear();
+    this.analysis = null;
+    requiredElement<HTMLElement>(this, "[data-mapping]").hidden = true;
+    requiredElement<HTMLElement>(this, "[data-results]").hidden = true;
+  }
+
+  private resetParser(): void {
+    this.parser?.terminate();
+    this.parser = null;
+  }
+
+  private parserForRequest(): ParserWorkerClient {
+    if (this.parser) return this.parser;
+    try {
+      this.parser = new ParserWorkerClient();
+      return this.parser;
+    } catch {
+      throw new NrPrbError("WORKER_FAILED");
+    }
+  }
+
   private async inspectFile(file: File): Promise<void> {
     this.hideError();
+    this.resetForNewInput();
     if (file.size > MAX_FILE_BYTES) {
       const error = new NrPrbError("FILE_TOO_LARGE");
       this.showError(error, true);
@@ -387,10 +479,10 @@ class NrPrbVisualizer extends HTMLElement {
       this.reportFailure(error);
       return;
     }
-    this.parser ??= new ParserWorkerClient();
     this.setProgress(3, "Opening local file");
+    this.setBusy(true, "file");
     try {
-      const inspection = await this.parser.inspect(
+      const inspection = await this.parserForRequest().inspect(
         file,
         kind,
         (value, message) => this.setProgress(value, message),
@@ -404,8 +496,11 @@ class NrPrbVisualizer extends HTMLElement {
     } catch (error) {
       this.stopProgress();
       const localError = asNrPrbError(error, "UNEXPECTED_FILE_ERROR");
+      if (localError.code === "WORKER_FAILED") this.resetParser();
       this.showError(localError, true);
       this.reportFailure(localError);
+    } finally {
+      this.setBusy(false, "file");
     }
   }
 
@@ -413,6 +508,7 @@ class NrPrbVisualizer extends HTMLElement {
     if (!this.parser) return;
     this.hideError();
     this.setProgress(5, "Switching worksheet locally");
+    this.setBusy(true, "file");
     try {
       const inspection = await this.parser.selectSheet(
         token,
@@ -425,8 +521,11 @@ class NrPrbVisualizer extends HTMLElement {
     } catch (error) {
       this.stopProgress();
       const localError = asNrPrbError(error, "SHEET_UNREADABLE");
+      if (localError.code === "WORKER_FAILED") this.resetParser();
       this.showError(localError, true);
       this.reportFailure(localError);
+    } finally {
+      this.setBusy(false, "file");
     }
   }
 
@@ -589,9 +688,8 @@ class NrPrbVisualizer extends HTMLElement {
       return;
     }
     this.hideError();
-    const button = requiredElement<HTMLButtonElement>(this, "[data-analyze]");
-    button.disabled = true;
     this.setProgress(5, "Processing locally");
+    this.setBusy(true, "analysis");
     try {
       const result = await this.parser.normalize(
         this.inspection.token,
@@ -607,16 +705,17 @@ class NrPrbVisualizer extends HTMLElement {
     } catch (error) {
       this.stopProgress();
       const localError = asNrPrbError(error, "UNEXPECTED_ANALYSIS_ERROR");
+      if (localError.code === "WORKER_FAILED") this.resetParser();
       this.showError(localError, true);
       this.reportFailure(localError);
     } finally {
-      button.disabled = false;
+      this.setBusy(false, "analysis");
     }
   }
 
   private loadDemo(kind: DemoKind): void {
     this.hideError();
-    this.inspection = null;
+    this.resetForNewInput();
     this.measurements = createDemoMeasurements(kind);
     this.normalization = {
       measurements: this.measurements,
@@ -667,6 +766,11 @@ class NrPrbVisualizer extends HTMLElement {
     const threshold = numericValue(
       requiredElement<HTMLInputElement>(this, "[data-threshold]"),
     );
+    const startMs = startText ? new Date(startText).getTime() : null;
+    const endMs = endText ? new Date(endText).getTime() : null;
+    if (startMs !== null && endMs !== null && startMs > endMs) {
+      throw new NrPrbError("INVALID_PERIOD_RANGE");
+    }
     return {
       unitMode: requiredElement<HTMLSelectElement>(this, "[data-unit]")
         .value as UnitMode,
@@ -677,8 +781,8 @@ class NrPrbVisualizer extends HTMLElement {
       intervalMs: Number(
         requiredElement<HTMLSelectElement>(this, "[data-interval]").value,
       ),
-      startMs: startText ? new Date(startText).getTime() : null,
-      endMs: endText ? new Date(endText).getTime() : null,
+      startMs,
+      endMs,
     };
   }
 
@@ -1013,6 +1117,10 @@ class NrPrbVisualizer extends HTMLElement {
   }
 
   private setProgress(value: number, message: string): void {
+    if (this.progressHideTimer !== null) {
+      window.clearTimeout(this.progressHideTimer);
+      this.progressHideTimer = null;
+    }
     const progress = requiredElement<HTMLElement>(this, "[data-progress]");
     progress.hidden = false;
     requiredElement<HTMLElement>(this, "[data-progress-bar]").style.width =
@@ -1023,17 +1131,37 @@ class NrPrbVisualizer extends HTMLElement {
 
   private finishProgress(): void {
     this.setProgress(100, "Local processing complete");
-    window.setTimeout(() => {
+    this.progressHideTimer = window.setTimeout(() => {
       requiredElement<HTMLElement>(this, "[data-progress]").hidden = true;
+      this.progressHideTimer = null;
     }, 500);
   }
 
   private stopProgress(): void {
+    if (this.progressHideTimer !== null) {
+      window.clearTimeout(this.progressHideTimer);
+      this.progressHideTimer = null;
+    }
     const progress = requiredElement<HTMLElement>(this, "[data-progress]");
     requiredElement<HTMLElement>(this, "[data-progress-bar]").style.width = "0";
     requiredElement<HTMLElement>(this, "[data-progress-label]").textContent =
       "Local processing stopped";
     progress.hidden = true;
+  }
+
+  private setBusy(active: boolean, operation: "file" | "analysis"): void {
+    this.toggleAttribute("aria-busy", active);
+    ["[data-file-trigger]", "[data-demo]", "[data-analyze]"].forEach(
+      (selector) => {
+        requiredElement<HTMLButtonElement>(this, selector).disabled = active;
+      },
+    );
+    requiredElement<HTMLSelectElement>(this, "[data-sheet]").disabled = active;
+    const analyze = requiredElement<HTMLButtonElement>(this, "[data-analyze]");
+    analyze.textContent =
+      active && operation === "analysis"
+        ? "Generating heatmap..."
+        : "Generate heatmap";
   }
 
   private focusRecoveryTarget(area: "mapping" | "period" | "scale"): void {

@@ -35,6 +35,7 @@ The engine emits optional browser-only usage events containing fixed action and 
 - PNG heatmap export, safe CSV summary export, and print view
 - Synthetic demo datasets and a deterministic sample generator
 - Empty wide and long CSV templates available directly from the import panel
+- Immediate demo and file-import actions before the workspace
 - File-size, row-count, and measurement-count safety limits
 
 ## Try it locally
@@ -120,7 +121,7 @@ The test suite covers format and PRB detection, CSV and XLSX parsing, separators
 
 ## Error handling
 
-Invalid input is shown as a fixed `NR-*` error code with a short explanation, corrective steps, and the relevant recovery control. Cases include empty or malformed CSV files, unreadable XLSX workbooks, incomplete column mappings, datasets with no valid measurements, browser safety limits, empty time filters, invalid manual scales, worker failures, and PNG export failures.
+Invalid input is shown as a fixed `NR-*` error code with a short explanation, corrective steps, and the relevant recovery control. Cases include empty or malformed CSV files, unreadable XLSX workbooks, incomplete column mappings, datasets with no valid measurements, browser safety limits, reversed or empty time filters, invalid manual scales, worker failures, and PNG export failures. A worker failure is reset before the next retry, and previous workbook data is released when a new input is selected.
 
 Raw parser messages never cross the Web Worker boundary and are never included in usage events. Only a fixed allowlisted failure context can be exposed to a consenting host analytics integration. See [Error handling](docs/error-handling.md).
 

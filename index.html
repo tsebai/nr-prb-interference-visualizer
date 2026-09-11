@@ -24,9 +24,44 @@
           Import structured NR interference counters and turn them into a
           full-bandwidth heatmap. Every value stays in this browser.
         </p>
+        <div class="standalone-actions">
+          <button
+            class="nr-button nr-button-primary"
+            type="button"
+            data-standalone-demo
+          >
+            Try the 273 PRB demo
+          </button>
+          <button
+            class="nr-button nr-button-secondary"
+            type="button"
+            data-standalone-file
+          >
+            Analyze my CSV or XLSX
+          </button>
+          <small
+            >Synthetic data gives an instant result. Your own file stays on this
+            device.</small
+          >
+        </div>
       </div>
       <nr-prb-visualizer></nr-prb-visualizer>
     </main>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      customElements.whenDefined("nr-prb-visualizer").then(function () {
+        var visualizer = document.querySelector("nr-prb-visualizer");
+        document
+          .querySelector("[data-standalone-demo]")
+          ?.addEventListener("click", function () {
+            visualizer?.startDemo("persistent");
+          });
+        document
+          .querySelector("[data-standalone-file]")
+          ?.addEventListener("click", function () {
+            visualizer?.focusFileImport();
+          });
+      });
+    </script>
   </body>
 </html>

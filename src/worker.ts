@@ -93,6 +93,9 @@ async function handleInspect(
 ): Promise<void> {
   if (request.file.size > MAX_FILE_BYTES)
     throw new NrPrbError("FILE_TOO_LARGE");
+  // Only one local file is active at a time. Releasing previous workbook
+  // matrices prevents repeated imports from accumulating browser memory.
+  workbooks.clear();
   progress(request.id, 5, "Reading file locally");
   const token = createToken();
   let sheets: string[];

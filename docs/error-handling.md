@@ -14,6 +14,7 @@ The visualizer converts local parser and rendering failures into fixed error cod
 
 ## Visualization and output cases
 
+- From date is later than the To date
 - Period filter excludes all valid measurements
 - Manual color scale minimum is missing or not lower than its maximum
 - Canvas rendering is unavailable
@@ -21,6 +22,8 @@ The visualizer converts local parser and rendering failures into fixed error cod
 - PNG image creation fails
 
 The summary CSV export is formula-protected. Template downloads contain headers only and no network data.
+
+If the browser worker fails, the interface discards it before the next retry. Selecting a new file or a synthetic demo also releases the previous workbook and normalized data from the active tool session.
 
 ## Privacy boundary
 

@@ -17,6 +17,7 @@ export const NR_PRB_ERROR_CODES = [
   "LONG_MAPPING_REQUIRED",
   "MEASUREMENT_LIMIT",
   "NO_VALID_MEASUREMENTS",
+  "INVALID_PERIOD_RANGE",
   "NO_PERIOD_DATA",
   "INVALID_SCALE",
   "RENDER_UNAVAILABLE",
@@ -234,6 +235,16 @@ const ERROR_PRESENTATIONS: Record<NrPrbErrorCode, NrPrbErrorPresentation> = {
       "download_long_template",
     ],
     focusSelector: "[data-format]",
+  },
+  INVALID_PERIOD_RANGE: {
+    displayCode: "NR-FILTER-002",
+    title: "Date range is reversed",
+    message: "The From value must be earlier than or equal to the To value.",
+    steps: [
+      "Correct either date, or clear both fields to analyze the complete period.",
+    ],
+    recovery: ["review_period"],
+    focusSelector: "[data-start]",
   },
   NO_PERIOD_DATA: {
     displayCode: "NR-FILTER-001",
